@@ -152,11 +152,11 @@ def main():
     if not os.path.exists(tmp_folder):
         os.makedirs(tmp_folder)
 
-    with open(tmp_folder + 'k_acc_dict.json', 'w') as fout:
+    with open(tmp_folder + '/k_acc_dict.json', 'w') as fout:
         json.dump(k_acc_dict, fout)
-    with open(tmp_folder + 'k_loss_dict.json', 'w') as fout:
+    with open(tmp_folder + '/k_loss_dict.json', 'w') as fout:
         json.dump(k_loss_dict, fout)
-    with open(tmp_folder + 'k_time_dict.json', 'w') as fout:
+    with open(tmp_folder + '/k_time_dict.json', 'w') as fout:
         json.dump(k_time_dict, fout)
 
 
