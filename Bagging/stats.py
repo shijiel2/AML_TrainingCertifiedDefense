@@ -163,7 +163,7 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-        NOTIFIER.notify(print(socket.gethostname()), 'Done.')
+        NOTIFIER.notify(socket.gethostname(), 'Done.')
     except Exception as err:
-        NOTIFIER.notify(print(socket.gethostname()),
+        NOTIFIER.notify(socket.gethostname(),
                         'Shit happened\n{}'.format(err))
