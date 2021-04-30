@@ -23,7 +23,7 @@ parser.add_argument('--start', default='0')
 parser.add_argument('--end', default='1')
 parser.add_argument('--k', default='30')
 parser.add_argument('--gpu', default='0')
-parser.add_argument('--gpum', default='0.1')
+# parser.add_argument('--gpum', default='0.9')
 
 
 args = parser.parse_args()
@@ -33,7 +33,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
 
 config = tf.compat.v1.ConfigProto()
-config.gpu_options.per_process_gpu_memory_fraction = float(args.gpum)
+# config.gpu_options.per_process_gpu_memory_fraction = float(args.gpum)
 config.gpu_options.visible_device_list = "0"
 set_session(tf.compat.v1.Session(config=config))
 
