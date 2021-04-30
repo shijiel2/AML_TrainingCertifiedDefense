@@ -145,7 +145,10 @@ def main():
             list_dict_add(k_time_dict, k_value, end_time-start_time)
 
     # save the results
-    tmp_folder = "./stats_result"
+    tmp_folder = "./results"
+    if not os.path.exists(tmp_folder):
+        os.makedirs(tmp_folder)
+    tmp_folder = "/stats_result"
     if not os.path.exists(tmp_folder):
         os.makedirs(tmp_folder)
     tmp_folder += "/mnist"
