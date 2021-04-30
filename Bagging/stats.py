@@ -14,6 +14,7 @@ import os
 import dataaug
 import timeit
 import json
+from notification import NOTIFIER
 
 
 import argparse
@@ -117,7 +118,7 @@ k_acc_dict = {}
 k_loss_dict = {}
 k_time_dict = {}
 for k_value in list(range(1, 100)) + list(range(100, 1000, 100)):
-    for i in range(10):
+    for i in range(3):
         # sampling with replacement.
         print('*****************')
         print('Subsample size k:', k_value)
@@ -161,3 +162,5 @@ with open(tmp_folder + 'k_loss_dict.json', 'w') as fout:
     json.dump(k_loss_dict, fout)
 with open(tmp_folder + 'k_time_dict.json', 'w') as fout:
     json.dump(k_time_dict, fout)
+
+NOTIFIER.notify("AML_Bagging_remote2", 'Done.')
