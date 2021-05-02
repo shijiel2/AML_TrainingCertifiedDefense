@@ -6,7 +6,7 @@ import math
 import os 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset',default='mnist')
-parser.add_argument("--k", type=str, default='100')
+parser.add_argument("--k", type=str, default='30')
 parser.add_argument("--n", type=str, default='60000')
 parser.add_argument("--ns", type=str, default='1000')
 parser.add_argument("--alpha", type=str, default='0.001')
@@ -69,8 +69,8 @@ def CertifyRadiusBS(ls,probability_bar,k,n):
 if __name__ == "__main__":    
 
 
-    input_file = './aggregate_result/'+args.dataset+'/k_'+args.k+'/aggregate_batch_k_'+args.k+'_start_0_end_'+args.ns+'.npz'
-    dstnpz_filepath = './aggregate_result/'+args.dataset+'/k_'+args.k+'/certified_poisoning_size_k_'+args.k+'_ns_'+args.ns+'_alpha_'+args.alpha+'.npz'
+    input_file = './results'+'/aggregate_result/'+args.dataset+'/k_'+args.k+'/aggregate_batch_k_'+args.k+'_start_0_end_'+args.ns+'.npz'
+    dstnpz_filepath = './results'+'/aggregate_result/'+args.dataset+'/k_'+args.k+'/certified_poisoning_size_k_'+args.k+'_ns_'+args.ns+'_alpha_'+args.alpha+'.npz'
 
     data = np.load(input_file)['x']
 

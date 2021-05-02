@@ -150,7 +150,7 @@ def main():
     tmp_folder = "./results"
     if not os.path.exists(tmp_folder):
         os.makedirs(tmp_folder)
-    tmp_folder = "/aggregate_result"
+    tmp_folder += "/aggregate_result"
     if not os.path.exists(tmp_folder):
         os.makedirs(tmp_folder)
     tmp_folder +="/mnist"
@@ -159,7 +159,7 @@ def main():
     aggregate_folder = "./results/aggregate_result/mnist/k_"+args.k
     if not os.path.exists(aggregate_folder):
         os.makedirs(aggregate_folder)
-    np.savez(aggregate_folder+"/aggregate_batch_k_"+args.k+"_start_"+args.start+"_end_"+args.end+".npz",x=aggregate_result)
+    np.savez(aggregate_folder+"/aggregate_batch_k_"+args.k+"_start_"+args.start+"_end_"+args.end+".npz", x=aggregate_result)
 
 
 if __name__ == "__main__":
