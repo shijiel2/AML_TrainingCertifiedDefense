@@ -66,7 +66,7 @@ def generate_backdoor(
         src_imgs = x_clean[y_clean == src]
 
         n_points_in_src = np.shape(src_imgs)[0]
-        indices_to_be_poisoned = np.random.choice(n_points_in_src, num_poison)
+        indices_to_be_poisoned = np.random.choice(n_points_in_src, num_poison, replace=False)
 
         imgs_to_be_poisoned = np.copy(src_imgs[indices_to_be_poisoned])
         if backdoor_type == "pattern":
@@ -77,6 +77,8 @@ def generate_backdoor(
             imgs_to_be_poisoned = add_single_bd(
                 imgs_to_be_poisoned, pixel_value=max_val
             )
+        x_poison = np.delete(x_poison, indices_to_be_poisoned, axis=0)
+        y_poison = np.delete(y_poison, indices_to_be_poisoned, axis=0)
         x_poison = np.append(x_poison, imgs_to_be_poisoned, axis=0)
         y_poison = np.append(y_poison, np.ones(num_poison) * tgt, axis=0)
         is_poison = np.append(is_poison, np.ones(num_poison))
