@@ -11,7 +11,7 @@ import os
 parser = argparse.ArgumentParser()
 parser.add_argument("--dataset", default="mnist")
 parser.add_argument("--k", type=str, default="30")
-parser.add_argument("--poison_size", default="100")
+parser.add_argument("--poison_size", default="0")
 parser.add_argument("--n", type=str, default="60000")
 parser.add_argument("--ns", type=str, default="1000")
 parser.add_argument("--alpha", type=str, default="0.001")
@@ -76,6 +76,39 @@ def Check_condition(radius_value, k_value, n_value, p_l_value, p_s_value):
     else:
         return False
 
+def check_condition_dp(radius_value, k_value, n_value, p_l_value, p_s_value):
+    r, k, n, pl, ps = np.float(radius_value), np.float(k_value), np.float(n_value), np.float(p_l_value), np.float(p_s_value)
+    eps = np.log((n+1)/n) * r
+    delta = (1 - ((n-1)/n)**(k*r))
+
+    val = pl-delta-ps*(np.e**(2*eps))-delta*(np.e**eps)
+
+    if val > 0:
+        return True
+    else:
+        return False
+
+def CertifyRadiusDP(ls, probability_bar, k, n):
+    radius = 0
+    p_ls = probability_bar[ls]
+    probability_bar[ls] = -1
+    runner_up_prob = np.amax(probability_bar)
+    if p_ls <= runner_up_prob:
+        return -1
+    # this is where to calculate the r
+    low, high = 0, 10000
+    while low <= high:
+        radius = math.ceil((low + high) / 2.0)
+        if check_condition_dp(radius, k, n, p_ls, runner_up_prob):
+            low = radius + 0.1
+        else:
+            high = radius - 1
+    radius = math.floor(low)
+    if check_condition_dp(radius, k, n, p_ls, runner_up_prob):
+        return radius
+    else:
+        print("error")
+        raise ValueError
 
 def CertifyRadiusBS(ls, probability_bar, k, n):
     radius = 0
@@ -84,6 +117,7 @@ def CertifyRadiusBS(ls, probability_bar, k, n):
     runner_up_prob = np.amax(probability_bar)
     if p_ls <= runner_up_prob:
         return -1
+    # this is where to calculate the r
     low, high = 0, 1500
     while low <= high:
         radius = math.ceil((low + high) / 2.0)
@@ -116,6 +150,7 @@ if __name__ == "__main__":
     num_data = data.shape[0]
 
     certified_poisoning_size_array = np.zeros([num_data], dtype=np.int)
+    certified_poisoning_size_array_dp = np.zeros([num_data], dtype=np.int)
     delta_l, delta_s = (
         1e-50,
         1e-50,
@@ -128,8 +163,13 @@ if __name__ == "__main__":
         probability_bar = CI[:, 1] + delta_s
         probability_bar = np.clip(probability_bar, a_min=-1, a_max=1 - pABar)
         probability_bar[ls] = pABar - delta_l
-        r = CertifyRadiusBS(ls, probability_bar, int(args.k), int(args.n))
-        certified_poisoning_size_array[idx] = r
+        probability_bar_dp = np.array(probability_bar, copy=True)
+        rb = CertifyRadiusBS(ls, probability_bar, int(args.k), int(args.n))
+        rd = CertifyRadiusDP(ls, probability_bar_dp, int(args.k), int(args.n))     
+        certified_poisoning_size_array[idx] = rb
+        certified_poisoning_size_array_dp[idx] = rd
+        exit()
+        print(idx)
 
     certified_poisoning_size_list = [
         0,
@@ -146,6 +186,7 @@ if __name__ == "__main__":
         1100,
     ]
     certified_acc_list = []
+    certified_acc_list_dp = []
 
     for radius in certified_poisoning_size_list:
         certified_acc_list.append(
@@ -156,12 +197,22 @@ if __name__ == "__main__":
             )
             / float(num_data)
         )
+        certified_acc_list_dp.append(
+            len(
+                certified_poisoning_size_array_dp[
+                    np.where(certified_poisoning_size_array_dp >= radius)
+                ]
+            )
+            / float(num_data)
+        )
 
     print("Clean acc:", (gt == pred).sum() / len(pred))
     print(certified_poisoning_size_list)
-    print(certified_acc_list)
+    print('BG:', certified_acc_list)
+    print('DP:', certified_acc_list_dp)
     with open(results_file, 'w') as f:
         f.write('clean acc:{:.5f}\n'.format((gt == pred).sum() / len(pred)))
         f.write('certified_poisoning_size_list:{}\n'.format(certified_poisoning_size_list))
-        f.write('certified_acc_list:           {}\n'.format(certified_acc_list))
+        f.write('certified_acc_list_bagging:   {}\n'.format(certified_acc_list))
+        f.write('certified_acc_list_dp:        {}\n'.format(certified_acc_list_dp))
     np.savez(dstnpz_file, x=certified_poisoning_size_array)
