@@ -168,8 +168,8 @@ if __name__ == "__main__":
         rd = CertifyRadiusDP(ls, probability_bar_dp, int(args.k), int(args.n))     
         certified_poisoning_size_array[idx] = rb
         certified_poisoning_size_array_dp[idx] = rd
-        exit()
-        print(idx)
+        # exit()
+        # print(idx)
 
     certified_poisoning_size_list = [
         0,
