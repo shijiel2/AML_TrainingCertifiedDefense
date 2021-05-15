@@ -78,10 +78,17 @@ def Check_condition(radius_value, k_value, n_value, p_l_value, p_s_value):
 
 def check_condition_dp(radius_value, k_value, n_value, p_l_value, p_s_value):
     r, k, n, pl, ps = np.float(radius_value), np.float(k_value), np.float(n_value), np.float(p_l_value), np.float(p_s_value)
-    eps = np.log((n+1)/n) * r
-    delta = (1 - ((n-1)/n)**(k*r))
+    eps = k*np.log((n+1)/n)
+    delta = 1 - ((n-1)/n)**k
 
-    val = pl-delta-ps*(np.e**(2*eps))-delta*(np.e**eps)
+    # print(eps)
+    # print(delta)
+
+    group_eps = eps * r
+    # group_delta = r * np.e**((r-1)*eps) * delta
+    group_delta = delta * r
+
+    val = pl-group_delta-ps*(np.e**(2*group_eps))-group_delta*(np.e**group_eps)
 
     if val > 0:
         return True
@@ -168,8 +175,10 @@ if __name__ == "__main__":
         rd = CertifyRadiusDP(ls, probability_bar_dp, int(args.k), int(args.n))     
         certified_poisoning_size_array[idx] = rb
         certified_poisoning_size_array_dp[idx] = rd
-        # exit()
         # print(idx)
+        # print('bg, dp:', rb, rd)
+    # exit()
+        
 
     certified_poisoning_size_list = [
         0,
@@ -215,4 +224,4 @@ if __name__ == "__main__":
         f.write('certified_poisoning_size_list:{}\n'.format(certified_poisoning_size_list))
         f.write('certified_acc_list_bagging:   {}\n'.format(certified_acc_list))
         f.write('certified_acc_list_dp:        {}\n'.format(certified_acc_list_dp))
-    np.savez(dstnpz_file, x=certified_poisoning_size_array)
+    np.savez(dstnpz_file, x=certified_poisoning_size_array, y=certified_poisoning_size_array_dp)
