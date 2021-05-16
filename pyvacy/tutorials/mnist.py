@@ -1,12 +1,14 @@
+import os
 import sys
-sys.path.append('../pyvacy')
+# add module in the parent directory
+sys.path.insert(1, os.path.join(sys.path[0], '..')) 
 
 import argparse
 import numpy as np
 
 import torch
 import torch.nn as nn
-from torch.utils.data import TensorDataset
+from torch.utils.data import TensorDataset, DataLoader
 from torchvision import datasets, transforms
 
 from pyvacy import optim, analysis, sampling
@@ -98,29 +100,12 @@ def train(params):
 
         if iteration % 10 == 0:
             print('[Iteration %d/%d] [Loss: %f]' % (iteration, params['iterations'], loss.item()))
+            test(classifier)
         iteration += 1
 
     return classifier
 
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--delta', type=float, default=1e-5, help='delta for epsilon calculation (default: 1e-5)')
-    parser.add_argument('--device', type=str, default=('cuda' if torch.cuda.is_available() else 'cpu'), help='whether or not to use cuda (default: cuda if available)')
-    parser.add_argument('--iterations', type=int, default=14000, help='number of iterations to train (default: 14000)')
-    parser.add_argument('--l2-norm-clip', type=float, default=1., help='upper bound on the l2 norm of gradient updates (default: 0.1)')
-    parser.add_argument('--l2-penalty', type=float, default=0.001, help='l2 penalty on model weights (default: 0.001)')
-    parser.add_argument('--lr', type=float, default=0.15, help='learning rate (default: 0.15)')
-    parser.add_argument('--microbatch-size', type=int, default=1, help='input microbatch size for training (default: 1)')
-    parser.add_argument('--minibatch-size', type=int, default=256, help='input minibatch size for training (default: 256)')
-    parser.add_argument('--noise-multiplier', type=float, default=1.1, help='ratio between clipping bound and std of noise applied to gradients (default: 1.1)')
-    params = vars(parser.parse_args())
-
-    classifier = train(params)
-
-    with open('dp_classifier.dat', 'wb') as f:
-        torch.save(classifier, f)
-
+def test(classifier):
     test_dataset = datasets.MNIST('data/mnist',
         train=False,
         download=True,
@@ -143,3 +128,25 @@ if __name__ == '__main__':
         count += 1.
     print('Test Accuracy: {}'.format(correct / count))
 
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--delta', type=float, default=1e-5, help='delta for epsilon calculation (default: 1e-5)')
+    parser.add_argument('--device', type=str, default=('cuda' if torch.cuda.is_available() else 'cpu'), help='whether or not to use cuda (default: cuda if available)')
+    parser.add_argument('--iterations', type=int, default=50, help='number of iterations to train (default: 14000)')
+    parser.add_argument('--l2-norm-clip', type=float, default=1., help='upper bound on the l2 norm of gradient updates (default: 0.1)')
+    parser.add_argument('--l2-penalty', type=float, default=0.001, help='l2 penalty on model weights (default: 0.001)')
+    parser.add_argument('--lr', type=float, default=0.15, help='learning rate (default: 0.15)')
+    parser.add_argument('--microbatch-size', type=int, default=1, help='input microbatch size for training (default: 1)')
+    parser.add_argument('--minibatch-size', type=int, default=256, help='input minibatch size for training (default: 256)')
+    parser.add_argument('--noise-multiplier', type=float, default=1.1, help='ratio between clipping bound and std of noise applied to gradients (default: 1.1)')
+    params = vars(parser.parse_args())
+
+    classifier = train(params)
+    test(classifier)
+
+    tmp_folder = './results/mnist/'
+    if not os.path.exists(tmp_folder):
+        os.makedirs(tmp_folder)
+    with open(tmp_folder + 'dp_classifier.dat', 'wb') as f:
+        torch.save(classifier, f)
