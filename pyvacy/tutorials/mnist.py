@@ -8,15 +8,18 @@ import numpy as np
 
 import torch
 import torch.nn as nn
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import TensorDataset, DataLoader, Subset
 from torchvision import datasets, transforms
+from torch.optim import SGD
 
 from pyvacy import optim, analysis, sampling
 
+from tqdm import tqdm
+
 
 # Deterministic output
-torch.manual_seed(0)
-np.random.seed(0)
+# torch.manual_seed(0)
+# np.random.seed(0)
 
 class Flatten(nn.Module):
     def forward(self, inp):
@@ -41,20 +44,37 @@ class Classifier(nn.Module):
         return self.model(x)
 
 
-def train(params):
-    train_dataset = datasets.MNIST('data/mnist',
-        train=True,
-        download=True,
-        transform=transforms.Compose([
-           transforms.ToTensor(),
-           transforms.Normalize((0.5,), (0.5,))
-        ])
+def train_clean(classifier, train_dataset, eval_dataset, params):
+    classifier.train()
+
+    # train_dataset = Subset(train_dataset, range(30))
+
+    optimizer = SGD(
+        params=classifier.parameters(),
+        lr=params['lr'],
+        weight_decay=params['l2_penalty'],
     )
 
-    classifier = Classifier(
-        input_dim=np.prod(train_dataset[0][0].shape),
-        device=params['device']
-    )
+    loss_function = nn.NLLLoss()
+
+    trainloader = DataLoader(train_dataset, batch_size=params['minibatch_size'], shuffle=True)
+
+    for epoch in range(params['iterations']):
+        for _, (data, target) in enumerate(trainloader):
+            data, target = data.to(params['device']), target.to(params['device'])
+            optimizer.zero_grad()
+            output = classifier(data)
+            loss = loss_function(output, target)
+            loss.backward()
+            optimizer.step()
+        if epoch % 10 == 0 and epoch != 0:
+            print('[Iteration %d/%d] [Loss: %f]' % (epoch, params['iterations'], loss.item()))
+            test(classifier, eval_dataset)
+            classifier.train()
+
+
+def train_dp(classifier, train_dataset, eval_dataset, params):
+    classifier.train()
 
     optimizer = optim.DPSGD(
         l2_norm_clip=params['l2_norm_clip'],
@@ -65,17 +85,6 @@ def train(params):
         lr=params['lr'],
         weight_decay=params['l2_penalty'],
     )
-
-    print('Achieves ({}, {})-DP'.format(
-        analysis.epsilon(
-            len(train_dataset),
-            params['minibatch_size'],
-            params['noise_multiplier'],
-            params['iterations'],
-            params['delta']
-        ),
-        params['delta'],
-    ))
 
     loss_function = nn.NLLLoss()
 
@@ -98,27 +107,23 @@ def train(params):
             optimizer.microbatch_step()
         optimizer.step()
 
-        if iteration % 10 == 0:
-            print('[Iteration %d/%d] [Loss: %f]' % (iteration, params['iterations'], loss.item()))
-            test(classifier)
+        # if iteration % 10 == 0 and iteration != 0:
+        #     print('[Iteration %d/%d] [Loss: %f]' % (iteration, params['iterations'], loss.item()))
+        #     test(classifier, eval_dataset)
+        #     classifier.train()
         iteration += 1
 
-    return classifier
 
-def test(classifier):
-    test_dataset = datasets.MNIST('data/mnist',
-        train=False,
-        download=True,
-        transform=transforms.Compose([
-           transforms.ToTensor(),
-           transforms.Normalize((0.5,), (0.5,))
-        ])
-    )
+def test(classifier, test_dataset, return_pred=False):
+    classifier.eval()
 
     X, y = next(iter(DataLoader(test_dataset, batch_size=len(test_dataset))))
     X, y  = X.to('cuda'), y.to('cuda')
 
     y_pred = classifier(X).max(1)[1]
+
+    if return_pred:
+        return y_pred
 
     count = 0.
     correct = 0.
@@ -128,25 +133,67 @@ def test(classifier):
         count += 1.
     print('Test Accuracy: {}'.format(correct / count))
 
+    
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--delta', type=float, default=1e-5, help='delta for epsilon calculation (default: 1e-5)')
     parser.add_argument('--device', type=str, default=('cuda' if torch.cuda.is_available() else 'cpu'), help='whether or not to use cuda (default: cuda if available)')
-    parser.add_argument('--iterations', type=int, default=50, help='number of iterations to train (default: 14000)')
-    parser.add_argument('--l2-norm-clip', type=float, default=1., help='upper bound on the l2 norm of gradient updates (default: 0.1)')
+    parser.add_argument('--iterations', type=int, default=100, help='number of iterations to train (default: 100)')
+    parser.add_argument('--l2-norm-clip', type=float, default=10., help='upper bound on the l2 norm of gradient updates (default: 10)')
     parser.add_argument('--l2-penalty', type=float, default=0.001, help='l2 penalty on model weights (default: 0.001)')
     parser.add_argument('--lr', type=float, default=0.15, help='learning rate (default: 0.15)')
     parser.add_argument('--microbatch-size', type=int, default=1, help='input microbatch size for training (default: 1)')
     parser.add_argument('--minibatch-size', type=int, default=256, help='input minibatch size for training (default: 256)')
     parser.add_argument('--noise-multiplier', type=float, default=1.1, help='ratio between clipping bound and std of noise applied to gradients (default: 1.1)')
+    parser.add_argument('--N', type=int, default=1000, help='number of samples (default: 1000)')
     params = vars(parser.parse_args())
 
-    classifier = train(params)
-    test(classifier)
+    train_dataset = datasets.MNIST('data/mnist',
+        train=True,
+        download=True,
+        transform=transforms.Compose([
+           transforms.ToTensor(),
+           transforms.Normalize((0.5,), (0.5,))
+        ])
+    )
+
+    test_dataset = datasets.MNIST('data/mnist',
+        train=False,
+        download=True,
+        transform=transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.5,), (0.5,))
+        ])
+    )
+
+    aggregate_result = np.zeros([len(test_dataset), 10 + 1], dtype=np.int)
+    for i in tqdm(range(params['N'])):
+        classifier = Classifier(
+            input_dim=np.prod(train_dataset[0][0].shape),
+            device=params['device']
+        )
+        train_dp(classifier, train_dataset, test_dataset, params)
+        y_pred = test(classifier, test_dataset, return_pred=True)    
+        aggregate_result[np.arange(0, len(test_dataset)), y_pred.cpu()] += 1
+    aggregate_result[np.arange(0, len(test_dataset)), -1] = next(iter(DataLoader(test_dataset, batch_size=len(test_dataset))))[1]
+
+    epsilon = analysis.epsilon(
+            len(train_dataset),
+            params['minibatch_size'],
+            params['noise_multiplier'],
+            params['iterations'],
+            params['delta']
+        )
+    print('Achieves ({}, {})-DP'.format(
+        epsilon,
+        params['delta'],
+    ))
+
 
     tmp_folder = './results/mnist/'
     if not os.path.exists(tmp_folder):
         os.makedirs(tmp_folder)
     with open(tmp_folder + 'dp_classifier.dat', 'wb') as f:
         torch.save(classifier, f)
+    np.savez(tmp_folder + 'aggregate_result', x=aggregate_result, epsilon=epsilon)
