@@ -10,11 +10,8 @@ import os
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--dataset", default="mnist")
-# parser.add_argument("--k", type=str, default="30")
-# parser.add_argument("--poison_size", default="0")
-# parser.add_argument("--n", type=str, default="60000")
-# parser.add_argument("--ns", type=str, default="1000")
 parser.add_argument("--alpha", type=str, default="0.001")
+parser.add_argument("--exp-name", type=str, default="noiseMPL5")
 
 args = parser.parse_args()
 
@@ -76,7 +73,7 @@ def CertifyRadiusDP(ls, probability_bar, epsilon, delta):
 
 if __name__ == "__main__":
 
-    folder_path = "./results/mnist/"
+    folder_path = "./results/mnist/{}/".format(args.exp_name)
     input_file = folder_path + 'aggregate_result.npz'
     dstnpz_file = folder_path + 'certified_poisoning_size_array.npz'
     results_file = folder_path + 'result.txt'

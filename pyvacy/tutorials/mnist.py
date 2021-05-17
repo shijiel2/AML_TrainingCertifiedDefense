@@ -192,7 +192,7 @@ if __name__ == '__main__':
 
     test(classifier, test_dataset) 
 
-    tmp_folder = './results/mnist/'
+    tmp_folder = './results/mnist/noiseMPL{}/'.format(params['noise_multiplier'])
     if not os.path.exists(tmp_folder):
         os.makedirs(tmp_folder)
-    np.savez(tmp_folder + 'aggregate_result_noiseMPL{}'.format(params['noise_multiplier']), x=aggregate_result, epsilon=epsilon, delta=params['delta'])
+    np.savez(tmp_folder + 'aggregate_result.npz', x=aggregate_result, epsilon=epsilon, delta=params['delta'])
