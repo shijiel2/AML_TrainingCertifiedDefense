@@ -137,15 +137,15 @@ def test(classifier, test_dataset, return_pred=False):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--delta', type=float, default=1e-5, help='delta for epsilon calculation (default: 1e-5)')
+    parser.add_argument('--delta', type=float, default=1e-3, help='delta for epsilon calculation (default: 1e-5)')
     parser.add_argument('--device', type=str, default=('cuda' if torch.cuda.is_available() else 'cpu'), help='whether or not to use cuda (default: cuda if available)')
-    parser.add_argument('--iterations', type=int, default=100, help='number of iterations to train (default: 100)')
+    parser.add_argument('--iterations', type=int, default=50, help='number of iterations to train (default: 100)')
     parser.add_argument('--l2-norm-clip', type=float, default=10., help='upper bound on the l2 norm of gradient updates (default: 10)')
     parser.add_argument('--l2-penalty', type=float, default=0.001, help='l2 penalty on model weights (default: 0.001)')
     parser.add_argument('--lr', type=float, default=0.15, help='learning rate (default: 0.15)')
     parser.add_argument('--microbatch-size', type=int, default=1, help='input microbatch size for training (default: 1)')
     parser.add_argument('--minibatch-size', type=int, default=256, help='input minibatch size for training (default: 256)')
-    parser.add_argument('--noise-multiplier', type=float, default=1.1, help='ratio between clipping bound and std of noise applied to gradients (default: 1.1)')
+    parser.add_argument('--noise-multiplier', type=float, default=5, help='ratio between clipping bound and std of noise applied to gradients (default: 1.1)')
     parser.add_argument('--N', type=int, default=1000, help='number of samples (default: 1000)')
     params = vars(parser.parse_args())
 
@@ -167,17 +167,6 @@ if __name__ == '__main__':
         ])
     )
 
-    aggregate_result = np.zeros([len(test_dataset), 10 + 1], dtype=np.int)
-    for i in tqdm(range(params['N'])):
-        classifier = Classifier(
-            input_dim=np.prod(train_dataset[0][0].shape),
-            device=params['device']
-        )
-        train_dp(classifier, train_dataset, test_dataset, params)
-        y_pred = test(classifier, test_dataset, return_pred=True)    
-        aggregate_result[np.arange(0, len(test_dataset)), y_pred.cpu()] += 1
-    aggregate_result[np.arange(0, len(test_dataset)), -1] = next(iter(DataLoader(test_dataset, batch_size=len(test_dataset))))[1]
-
     epsilon = analysis.epsilon(
             len(train_dataset),
             params['minibatch_size'],
@@ -190,10 +179,20 @@ if __name__ == '__main__':
         params['delta'],
     ))
 
+    aggregate_result = np.zeros([len(test_dataset), 10 + 1], dtype=np.int)
+    for i in tqdm(range(params['N'])):
+        classifier = Classifier(
+            input_dim=np.prod(train_dataset[0][0].shape),
+            device=params['device']
+        )
+        train_dp(classifier, train_dataset, test_dataset, params)
+        y_pred = test(classifier, test_dataset, return_pred=True)    
+        aggregate_result[np.arange(0, len(test_dataset)), y_pred.cpu()] += 1
+    aggregate_result[np.arange(0, len(test_dataset)), -1] = next(iter(DataLoader(test_dataset, batch_size=len(test_dataset))))[1]
+
+    test(classifier, test_dataset) 
 
     tmp_folder = './results/mnist/'
     if not os.path.exists(tmp_folder):
         os.makedirs(tmp_folder)
-    with open(tmp_folder + 'dp_classifier.dat', 'wb') as f:
-        torch.save(classifier, f)
-    np.savez(tmp_folder + 'aggregate_result', x=aggregate_result, epsilon=epsilon)
+    np.savez(tmp_folder + 'aggregate_result_noiseMPL{}'.format(params['noise_multiplier']), x=aggregate_result, epsilon=epsilon, delta=params['delta'])
