@@ -1,6 +1,10 @@
+import sys
+sys.path.append("..")
+
 from subprocess import Popen
 from notification import NOTIFIER
 import socket
+
 
 train_command = 'python train.py --k {k} --end {base_num} --poison_size {ps}'
 certify_command = 'python certify.py --k {k} --ns {base_num} --poison_size {ps}'

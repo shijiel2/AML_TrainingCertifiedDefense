@@ -2,20 +2,20 @@ import os
 import sys
 # add module in the parent directory
 sys.path.insert(1, os.path.join(sys.path[0], '..')) 
+sys.path.append("../..")
 
 import argparse
 import numpy as np
+import socket
 
 import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader, Subset
 from torchvision import datasets, transforms
 from torch.optim import SGD
-
 from pyvacy import optim, analysis, sampling
-
 from tqdm import tqdm
-
+from notification import NOTIFIER
 
 # Deterministic output
 # torch.manual_seed(0)
@@ -196,3 +196,5 @@ if __name__ == '__main__':
     if not os.path.exists(tmp_folder):
         os.makedirs(tmp_folder)
     np.savez(tmp_folder + 'aggregate_result.npz', x=aggregate_result, epsilon=epsilon, delta=params['delta'])
+
+    NOTIFIER.notify(socket.gethostname(), 'Screen Job pyvacy, Done.')
