@@ -18,6 +18,11 @@ parser.add_argument("--alpha", type=str, default="0.001")
 
 args = parser.parse_args()
 
+def hoeffding_confint(n, N, alpha):
+    p = n / N
+    plb = p - (np.log(1/alpha)/(2*N))**0.5
+    pub = p + (np.log(1/alpha)/(2*N))**0.5
+    return [plb, pub]
 
 def multi_ci(counts, alpha):
     multi_list = []

@@ -23,9 +23,10 @@ def multi_ci(counts, alpha):
     for i in range(l):
         multi_list.append(
             proportion_confint(
+                # counts[i],
                 min(max(counts[i], 1e-10), n - 1e-10),
                 n,
-                alpha=alpha * 2.0 / l,
+                alpha=alpha / 2,
                 method="beta",
             )
         )
@@ -100,7 +101,7 @@ if __name__ == "__main__":
     for idx in range(num_data):
         ls = data[idx][-1]
         class_freq = data[idx][:-1]
-        CI = multi_ci(class_freq, float(args.alpha) / data.shape[0])
+        CI = multi_ci(class_freq, float(args.alpha))
         pABar = CI[ls][0]
         probability_bar = CI[:, 1] + delta_s
         probability_bar = np.clip(probability_bar, a_min=-1, a_max=1 - pABar)
@@ -114,20 +115,7 @@ if __name__ == "__main__":
         # exit()
         
 
-    certified_poisoning_size_list = [
-        0,
-        100,
-        200,
-        300,
-        400,
-        500,
-        600,
-        700,
-        800,
-        900,
-        1000,
-        1100,
-    ]
+    certified_poisoning_size_list = list(range(50))
     certified_acc_list_dp = []
 
     for radius in certified_poisoning_size_list:

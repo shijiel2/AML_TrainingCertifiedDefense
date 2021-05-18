@@ -139,7 +139,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--delta', type=float, default=1e-3, help='delta for epsilon calculation (default: 1e-5)')
     parser.add_argument('--device', type=str, default=('cuda' if torch.cuda.is_available() else 'cpu'), help='whether or not to use cuda (default: cuda if available)')
-    parser.add_argument('--iterations', type=int, default=50, help='number of iterations to train (default: 100)')
+    parser.add_argument('--iterations', type=int, default=200, help='number of iterations to train (default: 100)')
     parser.add_argument('--l2-norm-clip', type=float, default=10., help='upper bound on the l2 norm of gradient updates (default: 10)')
     parser.add_argument('--l2-penalty', type=float, default=0.001, help='l2 penalty on model weights (default: 0.001)')
     parser.add_argument('--lr', type=float, default=0.15, help='learning rate (default: 0.15)')
@@ -179,6 +179,13 @@ if __name__ == '__main__':
         params['delta'],
     ))
 
+    result_folder = './results/mnist/noiseMPL{}/'.format(params['noise_multiplier'])
+    if not os.path.exists(result_folder):
+        os.makedirs(result_folder)
+    result_model_folder = result_folder + 'models/'
+    if not os.path.exists(result_model_folder):
+        os.makedirs(result_model_folder)
+
     aggregate_result = np.zeros([len(test_dataset), 10 + 1], dtype=np.int)
     for i in tqdm(range(params['N'])):
         classifier = Classifier(
@@ -186,15 +193,13 @@ if __name__ == '__main__':
             device=params['device']
         )
         train_dp(classifier, train_dataset, test_dataset, params)
+        torch.save(classifier, result_model_folder + 'model_{}'.format(i))
         y_pred = test(classifier, test_dataset, return_pred=True)    
         aggregate_result[np.arange(0, len(test_dataset)), y_pred.cpu()] += 1
     aggregate_result[np.arange(0, len(test_dataset)), -1] = next(iter(DataLoader(test_dataset, batch_size=len(test_dataset))))[1]
 
     test(classifier, test_dataset) 
 
-    tmp_folder = './results/mnist/noiseMPL{}/'.format(params['noise_multiplier'])
-    if not os.path.exists(tmp_folder):
-        os.makedirs(tmp_folder)
-    np.savez(tmp_folder + 'aggregate_result.npz', x=aggregate_result, epsilon=epsilon, delta=params['delta'])
+    np.savez(result_folder + 'aggregate_result.npz', x=aggregate_result, epsilon=epsilon, delta=params['delta'])
 
     NOTIFIER.notify(socket.gethostname(), 'Screen Job pyvacy, Done.')
