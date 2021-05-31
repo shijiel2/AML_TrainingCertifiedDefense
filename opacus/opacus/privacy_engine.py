@@ -416,6 +416,21 @@ class PrivacyEngine:
         )
         return float(eps), float(best_alpha)
 
+    def get_rdp_privacy_spent(self):
+        """
+        Computes the (alpha, epsilon)-RDP privacy budget spent so far.
+
+        Args:
+            target_delta: The Target delta. If None, it will default to the privacy
+                engine's target delta.
+
+        Returns:
+            Pair of epsilon and optimal order alpha.
+        """
+        rdp = self.get_renyi_divergence() * self.steps
+        import numpy
+        return numpy.array(self.alphas), rdp.cpu().detach().numpy()
+
     def zero_grad(self):
         """
         Resets clippers status.

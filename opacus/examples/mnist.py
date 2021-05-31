@@ -6,7 +6,11 @@ Runs MNIST training with differential privacy.
 
 """
 
+import sys
+sys.path.append("../..")
+
 import argparse
+import socket
 
 import numpy as np
 import torch
@@ -17,7 +21,8 @@ from opacus import PrivacyEngine
 from opacus.utils.uniform_sampler import UniformWithReplacementSampler
 from torchvision import datasets, transforms
 from tqdm import tqdm
-
+from pathlib import Path
+from notification import NOTIFIER
 
 # Precomputed characteristics of the MNIST dataset
 MNIST_MEAN = 0.1307
@@ -60,15 +65,16 @@ def train(args, model, device, train_loader, optimizer, epoch):
         optimizer.step()
         losses.append(loss.item())
 
-    if not args.disable_dp:
-        epsilon, best_alpha = optimizer.privacy_engine.get_privacy_spent(args.delta)
-        print(
-            f"Train Epoch: {epoch} \t"
-            f"Loss: {np.mean(losses):.6f} "
-            f"(ε = {epsilon:.2f}, δ = {args.delta}) for α = {best_alpha}"
-        )
-    else:
-        print(f"Train Epoch: {epoch} \t Loss: {np.mean(losses):.6f}")
+    # if not args.disable_dp:
+    #     epsilon, best_alpha = optimizer.privacy_engine.get_privacy_spent(args.delta)
+    #     print(
+    #         f"Train Epoch: {epoch} \t"
+    #         f"Loss: {np.mean(losses):.6f} "
+    #         f"(ε = {epsilon:.2f}, δ = {args.delta}) for α = {best_alpha}"
+    #     )
+    # else:
+    #     print(f"Train Epoch: {epoch} \t Loss: {np.mean(losses):.6f}")
+    print(f"Train Epoch: {epoch} \t Loss: {np.mean(losses):.6f}")
 
 
 def test(args, model, device, test_loader):
@@ -98,6 +104,16 @@ def test(args, model, device, test_loader):
     )
     return correct / len(test_loader.dataset)
 
+
+def pred(args, model, device, test_dataset):
+    model.eval()
+
+    X, y = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))
+    X, y  = X.to(device), y.to(device)
+
+    y_pred = model(X).max(1)[1]
+
+    return y_pred
 
 def main():
     # Training settings
@@ -187,10 +203,22 @@ def main():
         help="Enable Secure RNG to have trustworthy privacy guarantees. Comes at a performance cost",
     )
     parser.add_argument(
+        "--run-test",
+        action="store_true",
+        default=False,
+        help="Run test for the model (default: false)",
+    )
+    parser.add_argument(
         "--data-root",
         type=str,
         default="../mnist",
         help="Where MNIST is/will be stored",
+    )
+    parser.add_argument(
+        "--results-folder",
+        type=str,
+        default="../results/mnist",
+        help="Where MNIST results is/will be stored",
     )
     args = parser.parse_args()
     device = torch.device(args.device)
@@ -224,6 +252,17 @@ def main():
         ),
     )
 
+    test_dataset = datasets.MNIST(
+        args.data_root,
+        train=False,
+        transform=transforms.Compose(
+            [
+                transforms.ToTensor(),
+                transforms.Normalize((MNIST_MEAN,), (MNIST_STD,)),
+            ]
+        ),
+    )
+
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         generator=generator,
@@ -235,24 +274,24 @@ def main():
         **kwargs,
     )
     test_loader = torch.utils.data.DataLoader(
-        datasets.MNIST(
-            args.data_root,
-            train=False,
-            transform=transforms.Compose(
-                [
-                    transforms.ToTensor(),
-                    transforms.Normalize((MNIST_MEAN,), (MNIST_STD,)),
-                ]
-            ),
-        ),
+        test_dataset,
         batch_size=args.test_batch_size,
         shuffle=True,
         **kwargs,
     )
-    run_results = []
-    for _ in range(args.n_runs):
-        model = SampleConvNet().to(device)
 
+    # collect votes from all models
+    aggregate_result = np.zeros([len(test_dataset), 10 + 1], dtype=np.int)
+    # alphas in RDP
+    alphas = None
+    # epsilons in RDP
+    rdp_epsilons = None
+    # folder for this experiment 
+    result_folder = None
+    
+    for run_idx in range(args.n_runs):
+        # pre-training stuff
+        model = SampleConvNet().to(device)
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0)
         if not args.disable_dp:
             privacy_engine = PrivacyEngine(
@@ -264,26 +303,31 @@ def main():
                 secure_rng=args.secure_rng,
             )
             privacy_engine.attach(optimizer)
+        # training
         for epoch in range(1, args.epochs + 1):
             train(args, model, device, train_loader, optimizer, epoch)
-        run_results.append(test(args, model, device, test_loader))
-
-    if len(run_results) > 1:
-        print(
-            "Accuracy averaged over {} runs: {:.2f}% ± {:.2f}%".format(
-                len(run_results), np.mean(run_results) * 100, np.std(run_results) * 100
+        # post-training stuff
+        if args.run_test:
+            test(args, model, device, test_loader)
+        if alphas is None or rdp_epsilons is None:
+            alphas, rdp_epsilons = optimizer.privacy_engine.get_rdp_privacy_spent()
+        if result_folder is None:
+            repro_str = (
+                f"{model.name()}_{args.lr}_{args.sigma}_"
+                f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.n_runs}"
             )
-        )
-
-    repro_str = (
-        f"{model.name()}_{args.lr}_{args.sigma}_"
-        f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}"
-    )
-    torch.save(run_results, f"run_results_{repro_str}.pt")
-
-    if args.save_model:
-        torch.save(model.state_dict(), f"mnist_cnn_{repro_str}.pt")
-
+            result_folder = f"{args.results_folder}/{repro_str}"
+            Path(result_folder).mkdir(parents=True, exist_ok=True)
+        # save preds and model
+        aggregate_result[np.arange(0, len(test_dataset)), pred(args, model, device, test_dataset).cpu()] += 1
+        if args.save_model:
+            torch.save(model.state_dict(), f"{result_folder}/model_{run_idx}.pt")
+    # finish trining all models, save results
+    aggregate_result[np.arange(0, len(test_dataset)), -1] = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))[1]
+    np.save(f"{result_folder}/aggregate_result", aggregate_result)
+    np.save(f"{result_folder}/rdp_epsilons", rdp_epsilons)
+    np.save(f"{result_folder}/alphas", alphas)
 
 if __name__ == "__main__":
     main()
+    NOTIFIER.notify(socket.gethostname(), 'Screen Job pyvacy, Done.')
