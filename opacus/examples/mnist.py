@@ -83,7 +83,7 @@ def test(args, model, device, test_loader):
     test_loss = 0
     correct = 0
     with torch.no_grad():
-        for data, target in tqdm(test_loader):
+        for data, target in test_loader:
             data, target = data.to(device), target.to(device)
             output = model(data)
             test_loss += criterion(output, target).item()  # sum up batch loss
@@ -129,7 +129,7 @@ def main():
     parser.add_argument(
         "--test-batch-size",
         type=int,
-        default=1024,
+        default=16,
         metavar="TB",
         help="input batch size for testing (default: 1024)",
     )
@@ -177,6 +177,13 @@ def main():
         default=1e-5,
         metavar="D",
         help="Target delta (default: 1e-5)",
+    )
+    parser.add_argument(
+        "--sub-training-ratio",
+        type=float,
+        default=1.0,
+        metavar="C",
+        help="Ratio of sub-training set (default 1.0)",
     )
     parser.add_argument(
         "--device",
@@ -251,6 +258,8 @@ def main():
             ]
         ),
     )
+    indices = torch.randperm(len(train_dataset))[:10000]
+    train_dataset = torch.utils.data.Subset(train_dataset, indices)
 
     test_dataset = datasets.MNIST(
         args.data_root,
@@ -297,7 +306,7 @@ def main():
             privacy_engine = PrivacyEngine(
                 model,
                 sample_rate=args.sample_rate,
-                alphas=[1 + x / 10.0 for x in range(1, 100)] + list(range(12, 64)),
+                alphas=[1 + x / 10.0 for x in range(1, 100)] + list(range(12, 1500)),
                 noise_multiplier=args.sigma,
                 max_grad_norm=args.max_per_sample_grad_norm,
                 secure_rng=args.secure_rng,
@@ -306,11 +315,13 @@ def main():
         # training
         for epoch in range(1, args.epochs + 1):
             train(args, model, device, train_loader, optimizer, epoch)
+            if args.run_test:
+                test(args, model, device, test_loader)
         # post-training stuff
-        if args.run_test:
-            test(args, model, device, test_loader)
         if alphas is None or rdp_epsilons is None:
             alphas, rdp_epsilons = optimizer.privacy_engine.get_rdp_privacy_spent()
+            epsilon, best_alpha = optimizer.privacy_engine.get_privacy_spent(args.delta)
+            print(f"epsilon {epsilon}, best_alpha {best_alpha}")
         if result_folder is None:
             repro_str = (
                 f"{model.name()}_{args.lr}_{args.sigma}_"
@@ -321,7 +332,9 @@ def main():
         # save preds and model
         aggregate_result[np.arange(0, len(test_dataset)), pred(args, model, device, test_dataset).cpu()] += 1
         if args.save_model:
-            torch.save(model.state_dict(), f"{result_folder}/model_{run_idx}.pt")
+            models_folder = f"{result_folder}/models"
+            Path(models_folder).mkdir(parents=True, exist_ok=True)
+            torch.save(model.state_dict(), f"{models_folder}/model_{run_idx}.pt")
     # finish trining all models, save results
     aggregate_result[np.arange(0, len(test_dataset)), -1] = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))[1]
     np.save(f"{result_folder}/aggregate_result", aggregate_result)
@@ -330,4 +343,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    NOTIFIER.notify(socket.gethostname(), 'Screen Job pyvacy, Done.')
+    # NOTIFIER.notify(socket.gethostname(), 'Screen Job pyvacy, Done.')

@@ -11,8 +11,7 @@ import os
 parser = argparse.ArgumentParser()
 parser.add_argument("--dataset", default="mnist")
 parser.add_argument("--alpha", type=str, default="0.001")
-parser.add_argument("--exp-name", type=str, default="noiseMPL5")
-
+parser.add_argument("--exp-name", type=str, default="SampleConvNet_0.1_1.0_1.0_0.001_1_1000")
 args = parser.parse_args()
 
 
@@ -49,6 +48,25 @@ def check_condition_dp(radius_value, epsilon, delta, p_l_value, p_s_value):
     else:
         return False
 
+def check_condition_rdp(radius_value, epsilon, alpha, p_l_value, p_s_value):
+    k, e, a, pl, ps = np.float(radius_value), np.float(epsilon), np.float(alpha), np.float(p_l_value), np.float(p_s_value)
+    if k == 0:
+        return True
+
+    c = np.log2(k)
+    if a < 2*k:
+        return False
+
+    ga = a / k
+    ge = e * 3**c
+
+    val = (np.e**(-ge)) * (pl**(ga/(ga-1))) - (np.e**(ge)) * (ps**((ga-1)/ga))
+
+    if val > 0:
+        return True
+    else:
+        return False
+
 def CertifyRadiusDP(ls, probability_bar, epsilon, delta):
     radius = 0
     p_ls = probability_bar[ls]
@@ -72,23 +90,59 @@ def CertifyRadiusDP(ls, probability_bar, epsilon, delta):
         raise ValueError
 
 
+def _CertifyRadiusRDP(ls, probability_bar, epsilon, alpha):
+    radius = 0
+    p_ls = probability_bar[ls]
+    probability_bar[ls] = -1
+    runner_up_prob = np.amax(probability_bar)
+    if p_ls <= runner_up_prob:
+        return -1
+    for radius in range(10000, 0, -1):
+        if check_condition_rdp(radius, epsilon, alpha, p_ls, runner_up_prob):
+            return radius
+    return 0
+    
+    # # this is where to calculate the r
+    # low, high = 0, 60000
+    # while low <= high:
+    #     radius = math.ceil((low + high) / 2.0)
+    #     if check_condition_rdp(radius, epsilon, alpha, p_ls, runner_up_prob):
+    #         low = radius + 0.1
+    #     else:
+    #         high = radius - 1
+    # radius = math.floor(low)
+    # if check_condition_rdp(radius, epsilon, alpha, p_ls, runner_up_prob):
+    #     return radius
+    # else:
+    #     print("error")
+    #     raise ValueError
+
+def CertifyRadiusRDP(ls, probability_bar, epsilons, alphas):
+    rs = []
+    for eps, alp in zip(epsilons[500:], alphas[500:]):
+        # print(alp)
+        rs.append(_CertifyRadiusRDP(ls, probability_bar, eps, alp))
+    return max(rs)
+
+
 if __name__ == "__main__":
 
-    folder_path = "./results/mnist/{}/".format(args.exp_name)
-    input_file = folder_path + 'aggregate_result.npz'
-    dstnpz_file = folder_path + 'certified_poisoning_size_array.npz'
-    results_file = folder_path + 'result.txt'
+    folder_path = f"../results/mnist/{args.exp_name}"
+    aggregate_result_path = f"{folder_path}/aggregate_result.npy"
+    rdp_alphas_path = f"{folder_path}/alphas.npy"
+    rdp_epsilons_path = f"{folder_path}/rdp_epsilons.npy"
+    results_file_path = f"{folder_path}/results.txt"
 
-    data = np.load(input_file)["x"]
-    epsilon = np.load(input_file)["epsilon"]
-    delta = np.load(input_file)["delta"]
+    aggregate_result = np.load(aggregate_result_path)
+    rdp_alphas = np.load(rdp_alphas_path)
+    rdp_epsilons = np.load(rdp_epsilons_path)
 
-    pred_data = data[:, :10]
+    pred_data = aggregate_result[:, :10]
     pred = np.argmax(pred_data, axis=1)
-    gt = data[:, 10]
+    gt = aggregate_result[:, 10]
 
-    num_class = data.shape[1] - 1
-    num_data = data.shape[0]
+    num_class = aggregate_result.shape[1] - 1
+    num_data = aggregate_result.shape[0]
 
     certified_poisoning_size_array_dp = np.zeros([num_data], dtype=np.int)
     delta_l, delta_s = (
@@ -99,15 +153,15 @@ if __name__ == "__main__":
     un_count = 0
 
     for idx in range(num_data):
-        ls = data[idx][-1]
-        class_freq = data[idx][:-1]
+        ls = aggregate_result[idx][-1]
+        class_freq = aggregate_result[idx][:-1]
         CI = multi_ci(class_freq, float(args.alpha))
         pABar = CI[ls][0]
         probability_bar = CI[:, 1] + delta_s
         probability_bar = np.clip(probability_bar, a_min=-1, a_max=1 - pABar)
         probability_bar[ls] = pABar - delta_l
         probability_bar_dp = np.array(probability_bar, copy=True)
-        rd = CertifyRadiusDP(ls, probability_bar_dp, epsilon, delta)    
+        rd = CertifyRadiusDP(ls, probability_bar_dp, 0.00677825724599742, 1e-5)    
 
         certified_poisoning_size_array_dp[idx] = rd
         # print(idx)
@@ -131,8 +185,7 @@ if __name__ == "__main__":
     print("Clean acc:", (gt == pred).sum() / len(pred))
     print(certified_poisoning_size_list)
     print('DP:', certified_acc_list_dp)
-    with open(results_file, 'w') as f:
+    with open(results_file_path, 'w') as f:
         f.write('clean acc:{:.5f}\n'.format((gt == pred).sum() / len(pred)))
         f.write('certified_poisoning_size_list:{}\n'.format(certified_poisoning_size_list))
         f.write('certified_acc_list_dp:        {}\n'.format(certified_acc_list_dp))
-    np.savez(dstnpz_file, x=certified_poisoning_size_array_dp)

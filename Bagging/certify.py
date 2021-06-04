@@ -83,17 +83,16 @@ def Check_condition(radius_value, k_value, n_value, p_l_value, p_s_value):
 
 def check_condition_dp(radius_value, k_value, n_value, p_l_value, p_s_value):
     r, k, n, pl, ps = np.float(radius_value), np.float(k_value), np.float(n_value), np.float(p_l_value), np.float(p_s_value)
-    eps = k*np.log((n+1)/n)
-    delta = 1 - ((n-1)/n)**k
+    eps = k*np.log((n)/(n))
+    delta = 1 - ((n-r)/n)**k
 
     # print(eps)
     # print(delta)
 
-    group_eps = eps * r
-    # group_delta = r * np.e**((r-1)*eps) * delta
-    group_delta = delta * r
+    # eps = eps * r
+    # delta = delta * r
 
-    val = pl-group_delta-ps*(np.e**(2*group_eps))-group_delta*(np.e**group_eps)
+    val = pl-delta-ps*(np.e**(2*eps))-delta*(np.e**eps)
 
     if val > 0:
         return True
@@ -181,7 +180,7 @@ if __name__ == "__main__":
         certified_poisoning_size_array[idx] = rb
         certified_poisoning_size_array_dp[idx] = rd
         # print(idx)
-        # print('bg, dp:', rb, rd)
+        print('bg, dp:', rb, rd)
     # exit()
         
 
