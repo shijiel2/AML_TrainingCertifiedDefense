@@ -83,16 +83,15 @@ def Check_condition(radius_value, k_value, n_value, p_l_value, p_s_value):
 
 def check_condition_dp(radius_value, k_value, n_value, p_l_value, p_s_value):
     r, k, n, pl, ps = np.float(radius_value), np.float(k_value), np.float(n_value), np.float(p_l_value), np.float(p_s_value)
-    eps = k*np.log((n)/(n))
-    delta = 1 - ((n-r)/n)**k
+    
+    # # modification
+    # eps = k*np.log((n)/(n))
+    # delta = 1 - ((n-r)/n)**k
+    # val = pl-delta-ps*(np.e**(2*eps))-delta*(np.e**eps)
 
-    # print(eps)
-    # print(delta)
-
-    # eps = eps * r
-    # delta = delta * r
-
-    val = pl-delta-ps*(np.e**(2*eps))-delta*(np.e**eps)
+    # insertion
+    a = ((n+r)/n)**k
+    val = a*pl + (1-a) - a*ps
 
     if val > 0:
         return True
