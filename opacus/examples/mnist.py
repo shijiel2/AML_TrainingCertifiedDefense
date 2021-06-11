@@ -11,6 +11,7 @@ sys.path.append("../..")
 
 import argparse
 import socket
+import logging
 
 import numpy as np
 import torch
@@ -74,7 +75,7 @@ def train(args, model, device, train_loader, optimizer, epoch):
     #     )
     # else:
     #     print(f"Train Epoch: {epoch} \t Loss: {np.mean(losses):.6f}")
-    print(f"Train Epoch: {epoch} \t Loss: {np.mean(losses):.6f}")
+    logging.info(f"Train Epoch: {epoch} \t Loss: {np.mean(losses):.6f}")
 
 
 def test(args, model, device, test_loader):
@@ -94,7 +95,7 @@ def test(args, model, device, test_loader):
 
     test_loss /= len(test_loader.dataset)
 
-    print(
+    logging.info(
         "\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)\n".format(
             test_loss,
             correct,
@@ -129,7 +130,7 @@ def main():
     parser.add_argument(
         "--test-batch-size",
         type=int,
-        default=16,
+        default=1024,
         metavar="TB",
         help="input batch size for testing (default: 1024)",
     )
@@ -227,6 +228,12 @@ def main():
         default="../results/mnist",
         help="Where MNIST results is/will be stored",
     )
+    parser.add_argument(
+        "--model-name",
+        type=str,
+        default="SampleConvNet",
+        help="Name of the model",
+    )
     args = parser.parse_args()
     device = torch.device(args.device)
 
@@ -258,8 +265,6 @@ def main():
             ]
         ),
     )
-    indices = torch.randperm(len(train_dataset))[:10000]
-    train_dataset = torch.utils.data.Subset(train_dataset, indices)
 
     test_dataset = datasets.MNIST(
         args.data_root,
@@ -291,16 +296,22 @@ def main():
 
     # collect votes from all models
     aggregate_result = np.zeros([len(test_dataset), 10 + 1], dtype=np.int)
-    # alphas in RDP
-    alphas = None
-    # epsilons in RDP
-    rdp_epsilons = None
     # folder for this experiment 
-    result_folder = None
+    result_folder = (
+        f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
+        f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.n_runs}"
+    )
+    Path(result_folder).mkdir(parents=True, exist_ok=True)
+    # log file for this experiment
+    logging.basicConfig(filename=f"{result_folder}/train.log", level=logging.INFO)
     
     for run_idx in range(args.n_runs):
         # pre-training stuff
-        model = SampleConvNet().to(device)
+        if args.model_name == 'SampleConvNet':
+            model = SampleConvNet().to(device)
+        else:
+            logging.warn(f"Model name {args.model_name} invaild.")
+            exit()
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0)
         if not args.disable_dp:
             privacy_engine = PrivacyEngine(
@@ -318,17 +329,15 @@ def main():
             if args.run_test:
                 test(args, model, device, test_loader)
         # post-training stuff
-        if alphas is None or rdp_epsilons is None:
-            alphas, rdp_epsilons = optimizer.privacy_engine.get_rdp_privacy_spent()
-            epsilon, best_alpha = optimizer.privacy_engine.get_privacy_spent(args.delta)
-            print(f"epsilon {epsilon}, best_alpha {best_alpha}")
-        if result_folder is None:
-            repro_str = (
-                f"{model.name()}_{args.lr}_{args.sigma}_"
-                f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.n_runs}"
-            )
-            result_folder = f"{args.results_folder}/{repro_str}"
-            Path(result_folder).mkdir(parents=True, exist_ok=True)
+        if run_idx == 0:
+            rdp_alphas, rdp_epsilons = optimizer.privacy_engine.get_rdp_privacy_spent()
+            dp_epsilon, best_alpha = optimizer.privacy_engine.get_privacy_spent(args.delta)
+            rdp_steps = optimizer.privacy_engine.steps
+            logging.info(f"epsilon {dp_epsilon}, best_alpha {best_alpha}, steps {rdp_steps}")
+            np.save(f"{result_folder}/rdp_epsilons", rdp_epsilons)
+            np.save(f"{result_folder}/rdp_alphas", rdp_alphas)
+            np.save(f"{result_folder}/rdp_steps", rdp_steps)
+            np.save(f"{result_folder}/dp_epsilon", dp_epsilon)
         # save preds and model
         aggregate_result[np.arange(0, len(test_dataset)), pred(args, model, device, test_dataset).cpu()] += 1
         if args.save_model:
@@ -338,8 +347,6 @@ def main():
     # finish trining all models, save results
     aggregate_result[np.arange(0, len(test_dataset)), -1] = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))[1]
     np.save(f"{result_folder}/aggregate_result", aggregate_result)
-    np.save(f"{result_folder}/rdp_epsilons", rdp_epsilons)
-    np.save(f"{result_folder}/alphas", alphas)
 
 if __name__ == "__main__":
     main()

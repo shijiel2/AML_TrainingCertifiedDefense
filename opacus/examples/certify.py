@@ -41,7 +41,7 @@ def check_condition_dp(radius_value, epsilon, delta, p_l_value, p_s_value):
 
     # print(r, e, d, pl, ps)
 
-    val = pl-group_delta-ps*(np.e**(2*group_eps))-group_delta*(np.e**group_eps)
+    val = pl-ps*(np.e**(2*group_eps))-group_delta*(1+np.e**group_eps)
 
     if val > 0:
         return True
@@ -161,7 +161,7 @@ if __name__ == "__main__":
         probability_bar = np.clip(probability_bar, a_min=-1, a_max=1 - pABar)
         probability_bar[ls] = pABar - delta_l
         probability_bar_dp = np.array(probability_bar, copy=True)
-        rd = CertifyRadiusDP(ls, probability_bar_dp, 0.00677825724599742, 1e-5)    
+        rd = CertifyRadiusDP(ls, probability_bar_dp, 0.020746960732581223, 1e-5)    
 
         certified_poisoning_size_array_dp[idx] = rd
         # print(idx)
