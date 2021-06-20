@@ -387,6 +387,15 @@ class PrivacyEngine:
         )
         return rdp
 
+    @staticmethod
+    def _get_renyi_divergence(sample_rate, noise_multiplier, alphas):
+        rdp = torch.tensor(
+            privacy_analysis.compute_rdp(
+                sample_rate, noise_multiplier, 1, alphas
+            )
+        )
+        return rdp
+
     def get_privacy_spent(
         self, target_delta: Optional[float] = None
     ) -> Tuple[float, float]:
@@ -430,6 +439,29 @@ class PrivacyEngine:
         rdp = self.get_renyi_divergence() * self.steps
         import numpy
         return numpy.array(self.alphas), rdp.cpu().detach().numpy()
+
+    @staticmethod
+    def is_rdp_certified_radius(radius, sample_rate, steps, alpha, delta, sigma, p1, p2):
+
+        sample_rate = 1 - (1 - sample_rate)**radius
+        steps = steps
+        alphas = [alpha]
+
+        # print('sample rate', sample_rate)
+        # print('radius', radius)
+
+        rdp = PrivacyEngine._get_renyi_divergence(
+            sample_rate=sample_rate, noise_multiplier=sigma, alphas=alphas) * steps
+        eps, best_alpha = privacy_analysis.get_privacy_spent(
+            alphas, rdp, delta
+        )
+
+        import numpy as np
+        val = p1 - p2*(np.e**(2*eps)) - delta*(1 + np.e**eps)
+        if val >= 0:
+            return True
+        else:
+            return False
 
     def zero_grad(self):
         """
