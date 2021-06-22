@@ -463,6 +463,26 @@ class PrivacyEngine:
         else:
             return False
 
+    def is_rdp_certified_radius_2(radius, sample_rate, steps, alpha, delta, sigma, p1, p2):
+
+        sample_rate = 1 - (1 - sample_rate)**radius
+        steps = steps
+        alphas = [alpha]
+
+        # print('sample rate', sample_rate)
+        # print('radius', radius)
+
+        rdp = PrivacyEngine._get_renyi_divergence(
+            sample_rate=sample_rate, noise_multiplier=sigma, alphas=alphas) * steps
+        eps = rdp.cpu().detach().numpy()[0]
+
+        import numpy as np
+        val = np.e**(-eps) * p1**(alpha/(alpha-1)) - np.e**eps * p2**((alpha-1)/alpha)
+        if val >= 0:
+            return True
+        else:
+            return False
+
     def zero_grad(self):
         """
         Resets clippers status.

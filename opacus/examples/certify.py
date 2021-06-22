@@ -14,6 +14,7 @@ import torch.nn.functional as F
 
 from tqdm import tqdm
 from opacus import PrivacyEngine
+import matplotlib.pyplot as plt
 
 
 parser = argparse.ArgumentParser()
@@ -75,6 +76,12 @@ parser.add_argument(
     type=str,
     default="SampleConvNet",
     help="Name of the model",
+)
+parser.add_argument(
+    "--plot",
+    action="store_true",
+    default=False,
+    help="plot the certified acc",
 )
 args = parser.parse_args()
 
@@ -165,8 +172,9 @@ def CertifyRadiusRDP(ls, probability_bar, steps, sample_rate, sigma):
         return -1
 
     valid_radius = set()
-    for alpha in [1 + x / 10.0 for x in range(1, 100)]:
-        for delta in [x / 10.0 for x in range(1, 10)]:
+    for alpha in [1 + x/2 for x in range(1, 20)]:
+        for delta in [x / 100.0 for x in range(1, 10)]:
+        # for delta in [0]:
             # binary search for radius
             low, high = 0, 1000
             while low <= high:
@@ -186,21 +194,45 @@ def CertifyRadiusRDP(ls, probability_bar, steps, sample_rate, sigma):
 
     if len(valid_radius) > 0:
         max_radius = max(valid_radius, key=lambda x: x[0])[0]
-        for x in valid_radius:
-            if x[0] == max_radius:
-                print(x)
-        return max_radius
+        # for x in valid_radius:
+        #     if x[0] == max_radius:
+        #         print(x)
+        if max_radius == 0:
+            return -1
+        else:
+            return max_radius
     else:
-        return 0
+        return -1
+
+
+def certified_acc_against_radius(certified_poisoning_size_array, radius_range=100):
+    certified_radius_list = list(range(radius_range))
+    certified_acc_list = []
+
+    for radius in certified_radius_list:
+        certified_acc_list.append(
+            len(
+                certified_poisoning_size_array[
+                    np.where(certified_poisoning_size_array >= radius)
+                ]
+            )
+            / float(num_data)
+        )
+    return certified_acc_list, certified_radius_list
+
+
+def plot_certified_acc(cpsa_list, plot_path):
+    for cpsa in cpsa_list:
+        c_acc_list, c_rad_list = certified_acc_against_radius(cpsa)
+        plt.plot(c_rad_list, c_acc_list)
+    plt.savefig(plot_path, bbox_inches='tight')
+    plt.clf()
 
 
 def certify(certify_method, method_name):
     pred_data = aggregate_result[:, :10]
     pred = np.argmax(pred_data, axis=1)
     gt = aggregate_result[:, 10]
-
-    num_class = aggregate_result.shape[1] - 1
-    num_data = aggregate_result.shape[0]
 
     certified_poisoning_size_array = np.zeros([num_data], dtype=np.int)
     delta_l, delta_s = (
@@ -226,28 +258,17 @@ def certify(certify_method, method_name):
             logging.warn(f'Invalid certify method name {method_name}')
             exit(1)
         certified_poisoning_size_array[idx] = rd
-        print('radius:', rd)
+        # print('radius:', rd)
         # exit()
 
-    certified_poisoning_size_list = list(range(50))
-    certified_acc_list_dp = []
-
-    for radius in certified_poisoning_size_list:
-        certified_acc_list_dp.append(
-            len(
-                certified_poisoning_size_array[
-                    np.where(certified_poisoning_size_array >= radius)
-                ]
-            )
-            / float(num_data)
-        )
+    certified_acc_list, certified_radius_list = certified_acc_against_radius(certified_poisoning_size_array)
 
     logging.info(f'Clean acc: {(gt == pred).sum() / len(pred)}')
     logging.info(
-        f'{method_name}: certified_poisoning_size_list:\n{certified_poisoning_size_list}')
+        f'{method_name}: certified_poisoning_size_list:\n{certified_radius_list}')
     logging.info(
-        f'{method_name}: certified_acc_list_dp:\n{certified_acc_list_dp}')
-
+        f'{method_name}: certified_acc_list_dp:\n{certified_acc_list}')
+    return certified_poisoning_size_array
 
 if __name__ == "__main__":
     # main folder
@@ -265,6 +286,10 @@ if __name__ == "__main__":
     rdp_alphas = np.load(f"{result_folder}/rdp_alphas.npy")
     rdp_epsilons = np.load(f"{result_folder}/rdp_epsilons.npy")
     rdp_steps = np.load(f"{result_folder}/rdp_steps.npy")
+    
+    num_class = aggregate_result.shape[1] - 1
+    num_data = aggregate_result.shape[0]
+    
     # log params
     logging.info(
         f'lr: {args.lr} sigma: {args.sigma} C: {args.max_per_sample_grad_norm} sample_rate: {args.sample_rate} epochs: {args.epochs} n_runs: {args.n_runs}')
@@ -274,5 +299,14 @@ if __name__ == "__main__":
     logging.info(f'rdp steps: {rdp_steps}')
     logging.info(f'aggregate results:\n{aggregate_result}')
 
-    certify(CertifyRadiusDP, 'DP')
-    # certify(CertifyRadiusRDP, 'RDP')
+    if args.plot:
+        cpsa_dp = np.load(f"{result_folder}/dp_cpsa.npy")
+        cpsa_rdp = np.load(f"{result_folder}/rdp_cpsa.npy")
+        plot_certified_acc([cpsa_dp, cpsa_rdp], f"{result_folder}/certified_acc_plot.png")
+    
+    else:
+        # np.save(f"{result_folder}/dp_cpsa.npy", certify(CertifyRadiusDP, 'DP'))
+        np.save(f"{result_folder}/rdp_cpsa.npy", certify(CertifyRadiusRDP, 'RDP'))
+
+
+
