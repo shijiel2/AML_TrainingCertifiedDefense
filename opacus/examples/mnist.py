@@ -19,7 +19,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from opacus import PrivacyEngine
-from opacus.utils.uniform_sampler import UniformWithReplacementSampler
+from opacus.utils.uniform_sampler import UniformWithReplacementSampler, FixedSizedUniformWithReplacementSampler
 from torchvision import datasets, transforms
 from tqdm import tqdm
 from pathlib import Path
@@ -96,6 +96,14 @@ def test(args, model, device, test_loader):
     test_loss /= len(test_loader.dataset)
 
     logging.info(
+        "\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)\n".format(
+            test_loss,
+            correct,
+            len(test_loader.dataset),
+            100.0 * correct / len(test_loader.dataset),
+        )
+    )
+    print(
         "\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)\n".format(
             test_loss,
             correct,
@@ -234,6 +242,12 @@ def main():
         default="SampleConvNet",
         help="Name of the model",
     )
+    parser.add_argument(
+        "--bagging-size",
+        type=int,
+        default=0,
+        help="Size of bagging",
+    )
     args = parser.parse_args()
     device = torch.device(args.device)
 
@@ -266,6 +280,11 @@ def main():
         ),
     )
 
+    if args.bagging_size > 0:
+        indexs = np.random.choice(len(train_dataset), args.bagging_size, replace=True)
+        train_dataset = torch.utils.data.Subset(train_dataset, indexs)
+        print(f"new train dataset size {len(train_dataset)}")
+
     test_dataset = datasets.MNIST(
         args.data_root,
         train=False,
@@ -277,16 +296,25 @@ def main():
         ),
     )
 
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset,
-        generator=generator,
-        batch_sampler=UniformWithReplacementSampler(
-            num_samples=len(train_dataset),
-            sample_rate=args.sample_rate,
+    if not args.disable_dp:
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset,
             generator=generator,
-        ),
-        **kwargs,
-    )
+            batch_sampler=UniformWithReplacementSampler(
+                num_samples=len(train_dataset),
+                sample_rate=args.sample_rate,
+                generator=generator,
+            ),
+            **kwargs,
+        )
+    else:
+        print('No Gaussian Sampler')
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset,
+            batch_size=32,
+            shuffle=True,
+            **kwargs,
+        )
     test_loader = torch.utils.data.DataLoader(
         test_dataset,
         batch_size=args.test_batch_size,
@@ -301,9 +329,10 @@ def main():
         f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
         f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.n_runs}"
     )
+    print(f'Result folder: {result_folder}')
     Path(result_folder).mkdir(parents=True, exist_ok=True)
     # log file for this experiment
-    logging.basicConfig(filename=f"{result_folder}/train.log", level=logging.INFO)
+    logging.basicConfig(filename=f"{result_folder}/train.log", filemode='w', level=logging.INFO)
     
     for run_idx in range(args.n_runs):
         # pre-training stuff
@@ -334,10 +363,12 @@ def main():
             dp_epsilon, best_alpha = optimizer.privacy_engine.get_privacy_spent(args.delta)
             rdp_steps = optimizer.privacy_engine.steps
             logging.info(f"epsilon {dp_epsilon}, best_alpha {best_alpha}, steps {rdp_steps}")
-            np.save(f"{result_folder}/rdp_epsilons", rdp_epsilons)
-            np.save(f"{result_folder}/rdp_alphas", rdp_alphas)
-            np.save(f"{result_folder}/rdp_steps", rdp_steps)
-            np.save(f"{result_folder}/dp_epsilon", dp_epsilon)
+            print(f"epsilon {dp_epsilon}, best_alpha {best_alpha}, steps {rdp_steps}")
+            if args.save_model:
+                np.save(f"{result_folder}/rdp_epsilons", rdp_epsilons)
+                np.save(f"{result_folder}/rdp_alphas", rdp_alphas)
+                np.save(f"{result_folder}/rdp_steps", rdp_steps)
+                np.save(f"{result_folder}/dp_epsilon", dp_epsilon)
         # save preds and model
         aggregate_result[np.arange(0, len(test_dataset)), pred(args, model, device, test_dataset).cpu()] += 1
         if args.save_model:

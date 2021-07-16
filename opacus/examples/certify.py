@@ -173,18 +173,18 @@ def CertifyRadiusRDP(ls, probability_bar, steps, sample_rate, sigma):
 
     valid_radius = set()
     for alpha in [1 + x/2 for x in range(1, 20)]:
-        for delta in [x / 100.0 for x in range(1, 10)]:
-        # for delta in [0]:
+        # for delta in [x / 100.0 for x in range(1, 10)]:
+        for delta in [0]:
             # binary search for radius
             low, high = 0, 1000
             while low <= high:
                 radius = math.ceil((low + high) / 2.0)
-                if PrivacyEngine.is_rdp_certified_radius(radius=radius, sample_rate=sample_rate, steps=steps, alpha=alpha, delta=delta, sigma=sigma, p1=p1, p2=p2):
+                if PrivacyEngine.is_rdp_certified_radius_2(radius=radius, sample_rate=sample_rate, steps=steps, alpha=alpha, delta=delta, sigma=sigma, p1=p1, p2=p2):
                     low = radius + 0.1
                 else:
                     high = radius - 1
             radius = math.floor(low)
-            if PrivacyEngine.is_rdp_certified_radius(radius=radius, sample_rate=sample_rate, steps=steps, alpha=alpha, delta=delta, sigma=sigma, p1=p1, p2=p2):
+            if PrivacyEngine.is_rdp_certified_radius_2(radius=radius, sample_rate=sample_rate, steps=steps, alpha=alpha, delta=delta, sigma=sigma, p1=p1, p2=p2):
                 valid_radius.add((radius, alpha, delta))
             elif radius == 0:
                 valid_radius.add((radius, alpha, delta))
@@ -194,9 +194,9 @@ def CertifyRadiusRDP(ls, probability_bar, steps, sample_rate, sigma):
 
     if len(valid_radius) > 0:
         max_radius = max(valid_radius, key=lambda x: x[0])[0]
-        # for x in valid_radius:
-        #     if x[0] == max_radius:
-        #         print(x)
+        for x in valid_radius:
+            if x[0] == max_radius:
+                print(x)
         if max_radius == 0:
             return -1
         else:

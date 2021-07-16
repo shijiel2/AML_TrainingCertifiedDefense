@@ -477,7 +477,7 @@ class PrivacyEngine:
         eps = rdp.cpu().detach().numpy()[0]
 
         import numpy as np
-        val = np.e**(-eps) * p1**(alpha/(alpha-1)) - np.e**eps * p2**((alpha-1)/alpha)
+        val = np.e**(-eps) * p1**(alpha/(alpha-1)) - (np.e**eps * p2)**((alpha-1)/alpha)
         if val >= 0:
             return True
         else:

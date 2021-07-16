@@ -10,17 +10,18 @@ MNIST_TRAIN_COMMAND = 'python mnist.py --n-runs {n_runs} --epochs {epochs} --sig
 MNIST_CERTIFY_COMMAND = 'python certify.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr}'
 MNIST_PLOT_COMMAND = 'python certify.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr} --plot'
 
-MODE = 'certify'
+MODE = 'train'
 
 n_runss = [1000]
 epochss = [1]
 # sigmas = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]
-sigmas = [5]
+sigmas = [1.0]
 sample_rates = [0.001]
 lrs = [0.1]
 
 for nr, ep, sig, sr, lr in itertools.product(n_runss, epochss, sigmas, sample_rates, lrs):
     if MODE == 'train':
+        print(MNIST_TRAIN_COMMAND.format(n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr))
         proc = Popen(MNIST_TRAIN_COMMAND.format(n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr),
                      shell=True,
                      cwd='./')
@@ -45,4 +46,4 @@ for nr, ep, sig, sr, lr in itertools.product(n_runss, epochss, sigmas, sample_ra
 #              cwd='./')
 # proc.wait()
 
-NOTIFIER.notify(socket.gethostname(), 'Job Done.')
+# NOTIFIER.notify(socket.gethostname(), 'Job Done.')

@@ -90,8 +90,12 @@ def check_condition_dp(radius_value, k_value, n_value, p_l_value, p_s_value):
     # val = pl-delta-ps*(np.e**(2*eps))-delta*(np.e**eps)
 
     # insertion
-    a = ((n+r)/n)**k
-    val = a*pl + (1-a) - a*ps
+    # a = ((n+r)/n)**k
+    # val = a*pl + (1-a) - a*ps
+
+    # modification
+    a = 1 - ((n-r)/n)**k
+    val = pl - a - a - ps
 
     if val > 0:
         return True
