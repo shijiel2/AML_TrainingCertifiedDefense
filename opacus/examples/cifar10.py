@@ -9,6 +9,8 @@ import argparse
 import os
 import shutil
 import sys
+from pathlib import Path
+import logging
 
 import numpy as np
 import torch
@@ -59,12 +61,6 @@ def convnet(num_classes):
         nn.Flatten(start_dim=1, end_dim=-1),
         nn.Linear(128, num_classes, bias=True),
     )
-
-
-def save_checkpoint(state, is_best, filename="checkpoint.tar"):
-    torch.save(state, filename)
-    if is_best:
-        shutil.copyfile(filename, "model_best.pth.tar")
 
 
 def accuracy(preds, labels):
@@ -149,8 +145,31 @@ def test(args, model, test_loader, device):
     top1_avg = np.mean(top1_acc)
     stats.update(stats.StatType.TEST, acc1=top1_avg)
 
-    print(f"\tTest set:" f"Loss: {np.mean(losses):.6f} " f"Acc@1: {top1_avg :.6f} ")
-    return np.mean(top1_acc)
+    strv = f"\tTest set:" f"Loss: {np.mean(losses):.6f} " f"Acc@1: {top1_avg :.6f} "
+    logging.info(strv)
+    return
+
+
+def pred(args, model, test_dataset, device):
+    # model.eval()
+    # preds_list = []
+    # with torch.no_grad():
+    #     for images, _ in tqdm(test_loader):
+    #         images = images.to(device)
+    #         output = model(images)
+    #         preds = np.argmax(output.detach().cpu().numpy(), axis=1)
+    #         preds_list.extend(preds)
+
+    # return preds_list
+
+    model.eval()
+
+    X, y = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))
+    X, y  = X.to(device), y.to(device)
+
+    y_pred = model(X).max(1)[1]
+
+    return y_pred
 
 
 # flake8: noqa: C901
@@ -320,8 +339,63 @@ def main():
         default=-1,
         help="Local rank if multi-GPU training, -1 for single GPU training",
     )
+    # New added args
+    parser.add_argument(
+        "--model-name",
+        type=str,
+        default="ConvNet",
+        help="Name of the model structure",
+    )
+    parser.add_argument(
+        "--results-folder",
+        type=str,
+        default="../results/cifar10",
+        help="Where CIFAR10 results is/will be stored",
+    )
+    parser.add_argument(
+        "--bagging-size",
+        type=int,
+        default=0,
+        help="Size of bagging",
+    )
+    parser.add_argument(
+        "-r",
+        "--n-runs",
+        type=int,
+        default=1,
+        metavar="R",
+        help="number of runs to average on (default: 1)",
+    )
+    parser.add_argument(
+        "--save-model",
+        action="store_true",
+        default=False,
+        help="Save the trained model (default: false)",
+    )
+    parser.add_argument(
+        "--run-test",
+        action="store_true",
+        default=False,
+        help="Run test for the model (default: false)",
+    )
 
     args = parser.parse_args()
+
+    # folder path
+    if not args.disable_dp:
+        result_folder = (
+            f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
+            f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.n_runs}"
+        )
+    else:
+        result_folder = (
+            f"{args.results_folder}/Bagging_{args.model_name}_{args.lr}_{args.bagging_size}_"
+            f"{args.epochs}_{args.n_runs}"
+        )
+    print(f'Result folder: {result_folder}')
+    Path(result_folder).mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(filename=f"{result_folder}/train.log", filemode='w', level=logging.INFO)
+    logging.getLogger().addHandler(logging.StreamHandler())
 
     distributed = False
     if args.local_rank != -1:
@@ -387,16 +461,31 @@ def main():
         root=args.data_root, train=True, download=True, transform=train_transform
     )
 
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset,
-        num_workers=args.workers,
-        generator=generator,
-        batch_sampler=UniformWithReplacementSampler(
-            num_samples=len(train_dataset),
-            sample_rate=args.sample_rate,
+    if args.bagging_size > 0:
+        indexs = np.random.choice(len(train_dataset), args.bagging_size, replace=True)
+        train_dataset = torch.utils.data.Subset(train_dataset, indexs)
+        print(f"Sub-training dataset size {len(train_dataset)}")
+
+    if not args.disable_dp:
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset,
+            num_workers=args.workers,
             generator=generator,
-        ),
-    )
+            batch_sampler=UniformWithReplacementSampler(
+                num_samples=len(train_dataset),
+                sample_rate=args.sample_rate,
+                generator=generator,
+            ),
+        )
+    else:
+        print('No Gaussian Sampler')
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset,
+            num_workers=args.workers,
+            generator=generator,
+            batch_size=128,
+            shuffle=True,
+        )
 
     test_dataset = CIFAR10(
         root=args.data_root, train=False, download=True, transform=test_transform
@@ -408,70 +497,93 @@ def main():
         num_workers=args.workers,
     )
 
-    best_acc1 = 0
     if distributed and args.device == "cuda":
         args.device = "cuda:" + str(args.local_rank)
     device = torch.device(args.device)
 
-    model = convnet(num_classes=10)
-    model = model.to(device)
-
-    if distributed:
-        if not args.disable_dp:
-            model = DPDDP(model)
+    """ Here we go the training and testing process """
+    
+    # collect votes from all models
+    aggregate_result = np.zeros([len(test_dataset), 10 + 1], dtype=np.int)
+    
+    for run_idx in range(args.n_runs):
+        # Pre-training stuff for each base classifier
+        
+        # Define the model
+        if args.model_name == 'ConvNet':
+            model = convnet(num_classes=10)
+            model = model.to(device)
         else:
-            model = DDP(model, device_ids=[args.local_rank])
+            exit(f'Model name {args.model_name} invaild.')
+        if distributed:
+            if not args.disable_dp:
+                model = DPDDP(model)
+            else:
+                model = DDP(model, device_ids=[args.local_rank])
+        
+        # Define the optimizer
+        if args.optim == "SGD":
+            optimizer = optim.SGD(
+                model.parameters(),
+                lr=args.lr,
+                momentum=args.momentum,
+                weight_decay=args.weight_decay,
+            )
+        elif args.optim == "RMSprop":
+            optimizer = optim.RMSprop(model.parameters(), lr=args.lr)
+        elif args.optim == "Adam":
+            optimizer = optim.Adam(model.parameters(), lr=args.lr)
+        else:
+            raise NotImplementedError("Optimizer not recognized. Please check spelling")
 
-    if args.optim == "SGD":
-        optimizer = optim.SGD(
-            model.parameters(),
-            lr=args.lr,
-            momentum=args.momentum,
-            weight_decay=args.weight_decay,
-        )
-    elif args.optim == "RMSprop":
-        optimizer = optim.RMSprop(model.parameters(), lr=args.lr)
-    elif args.optim == "Adam":
-        optimizer = optim.Adam(model.parameters(), lr=args.lr)
-    else:
-        raise NotImplementedError("Optimizer not recognized. Please check spelling")
+        # Define the DP engine
+        if not args.disable_dp:
+            privacy_engine = PrivacyEngine(
+                model,
+                sample_rate=args.sample_rate * args.n_accumulation_steps,
+                alphas=[1 + x / 10.0 for x in range(1, 100)] + list(range(12, 64)),
+                noise_multiplier=args.sigma,
+                max_grad_norm=args.max_per_sample_grad_norm,
+                secure_rng=args.secure_rng,
+                **clipping,
+            )
+            privacy_engine.attach(optimizer)
+        
+        # Training and testing
+        for epoch in range(args.start_epoch, args.epochs + 1):
+            if args.lr_schedule == "cos":
+                lr = args.lr * 0.5 * (1 + np.cos(np.pi * epoch / (args.epochs + 1)))
+                for param_group in optimizer.param_groups:
+                    param_group["lr"] = lr
 
-    if not args.disable_dp:
-        privacy_engine = PrivacyEngine(
-            model,
-            sample_rate=args.sample_rate * args.n_accumulation_steps,
-            alphas=[1 + x / 10.0 for x in range(1, 100)] + list(range(12, 64)),
-            noise_multiplier=args.sigma,
-            max_grad_norm=args.max_per_sample_grad_norm,
-            secure_rng=args.secure_rng,
-            **clipping,
-        )
-        privacy_engine.attach(optimizer)
+            train(args, model, train_loader, optimizer, epoch, device)
+            if args.run_test:
+                test(args, model, test_loader, device)
+            
+        # Post-training stuff 
 
-    for epoch in range(args.start_epoch, args.epochs + 1):
-        if args.lr_schedule == "cos":
-            lr = args.lr * 0.5 * (1 + np.cos(np.pi * epoch / (args.epochs + 1)))
-            for param_group in optimizer.param_groups:
-                param_group["lr"] = lr
+        # save the DP related data
+        if run_idx == 0 and not args.disable_dp:
+            rdp_alphas, rdp_epsilons = optimizer.privacy_engine.get_rdp_privacy_spent()
+            dp_epsilon, best_alpha = optimizer.privacy_engine.get_privacy_spent(args.delta)
+            rdp_steps = optimizer.privacy_engine.steps
+            logging.info(f"epsilon {dp_epsilon}, best_alpha {best_alpha}, steps {rdp_steps}")
+            if args.save_model:
+                np.save(f"{result_folder}/rdp_epsilons", rdp_epsilons)
+                np.save(f"{result_folder}/rdp_alphas", rdp_alphas)
+                np.save(f"{result_folder}/rdp_steps", rdp_steps)
+                np.save(f"{result_folder}/dp_epsilon", dp_epsilon)
+        
+        # save preds and model
+        aggregate_result[np.arange(0, len(test_dataset)), pred(args, model, test_dataset, device).cpu()] += 1
+        if args.save_model:
+            models_folder = f"{result_folder}/models"
+            Path(models_folder).mkdir(parents=True, exist_ok=True)
+            torch.save(model.state_dict(), f"{models_folder}/model_{run_idx}.pt")
 
-        train(args, model, train_loader, optimizer, epoch, device)
-        top1_acc = test(args, model, test_loader, device)
-
-        # remember best acc@1 and save checkpoint
-        is_best = top1_acc > best_acc1
-        best_acc1 = max(top1_acc, best_acc1)
-
-        save_checkpoint(
-            {
-                "epoch": epoch + 1,
-                "arch": "Convnet",
-                "state_dict": model.state_dict(),
-                "best_acc1": best_acc1,
-                "optimizer": optimizer.state_dict(),
-            },
-            is_best,
-            filename=args.checkpoint_file + ".tar",
-        )
+    # Finish trining all models, save results
+    aggregate_result[np.arange(0, len(test_dataset)), -1] = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))[1]
+    np.save(f"{result_folder}/aggregate_result", aggregate_result)
 
     if args.local_rank != -1:
         cleanup()

@@ -325,10 +325,16 @@ def main():
     # collect votes from all models
     aggregate_result = np.zeros([len(test_dataset), 10 + 1], dtype=np.int)
     # folder for this experiment 
-    result_folder = (
-        f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
-        f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.n_runs}"
-    )
+    if not args.disable_dp:
+        result_folder = (
+            f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
+            f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.n_runs}"
+        )
+    else:
+        result_folder = (
+            f"{args.results_folder}/Bagging_{args.model_name}_{args.lr}_{args.bagging_size}_"
+            f"{args.epochs}_{args.n_runs}"
+        )
     print(f'Result folder: {result_folder}')
     Path(result_folder).mkdir(parents=True, exist_ok=True)
     # log file for this experiment
@@ -358,7 +364,7 @@ def main():
             if args.run_test:
                 test(args, model, device, test_loader)
         # post-training stuff
-        if run_idx == 0:
+        if run_idx == 0 and not args.disable_dp:
             rdp_alphas, rdp_epsilons = optimizer.privacy_engine.get_rdp_privacy_spent()
             dp_epsilon, best_alpha = optimizer.privacy_engine.get_privacy_spent(args.delta)
             rdp_steps = optimizer.privacy_engine.steps
