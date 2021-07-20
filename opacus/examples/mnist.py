@@ -339,6 +339,7 @@ def main():
     Path(result_folder).mkdir(parents=True, exist_ok=True)
     # log file for this experiment
     logging.basicConfig(filename=f"{result_folder}/train.log", filemode='w', level=logging.INFO)
+    logging.getLogger().addHandler(logging.StreamHandler())
     
     for run_idx in range(args.n_runs):
         # pre-training stuff

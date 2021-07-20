@@ -209,7 +209,7 @@ def main():
     )
     parser.add_argument(
         "--sample-rate",
-        default=0.04,
+        default=0.01,
         type=float,
         metavar="SR",
         help="sample rate used for batch construction (default: 0.005)",
@@ -225,7 +225,7 @@ def main():
     parser.add_argument(
         "--lr",
         "--learning-rate",
-        default=0.1,
+        default=0.01,
         type=float,
         metavar="LR",
         help="initial learning rate",
@@ -285,7 +285,7 @@ def main():
         "-c",
         "--max-per-sample-grad_norm",
         type=float,
-        default=10.0,
+        default=25.0,
         metavar="C",
         help="Clip per-sample gradients to this norm (default 1.0)",
     )
@@ -558,6 +558,7 @@ def main():
 
             train(args, model, train_loader, optimizer, epoch, device)
             if args.run_test:
+                logging.info(f'Epoch: {epoch}')
                 test(args, model, test_loader, device)
             
         # Post-training stuff 
