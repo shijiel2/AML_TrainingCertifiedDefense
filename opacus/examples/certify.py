@@ -280,7 +280,7 @@ def CertifyRadiusBS(ls, probability_bar, k, n):
         raise ValueError
 
 
-def certified_acc_against_radius(certified_poisoning_size_array, radius_range=100):
+def certified_acc_against_radius(certified_poisoning_size_array, radius_range=50):
     certified_radius_list = list(range(radius_range))
     certified_acc_list = []
 
@@ -296,12 +296,16 @@ def certified_acc_against_radius(certified_poisoning_size_array, radius_range=10
     return certified_acc_list, certified_radius_list
 
 
-def plot_certified_acc(cpsa_list, plot_path):
+def plot_certified_acc(cpsa_list, plot_path, name_list):
     print(plot_path)
-    for cpsa in cpsa_list:
+    for cpsa, name in zip(cpsa_list, name_list):
         c_acc_list, c_rad_list = certified_acc_against_radius(cpsa)
         logging.info(f'(Rad, Acc):{list(zip(c_rad_list, c_acc_list))}')
-        plt.plot(c_rad_list, c_acc_list)
+        plt.plot(c_rad_list, c_acc_list, label=name)
+    plt.xlabel('Number of poisoned training examples')
+    plt.ylabel('Certified Accuracy')
+    plt.legend(loc="upper right")
+    plt.grid(True)
     plt.savefig(plot_path, bbox_inches='tight')
     plt.clf()
 
@@ -402,20 +406,21 @@ if __name__ == "__main__":
     # Certify
     if not args.plot:
         if not args.disable_dp:
-            np.save(f"{result_folder}/dp_cpsa.npy", certify('dp'))
-            np.save(f"{result_folder}/rdp_cpsa.npy", certify('rdp'))
+            # np.save(f"{result_folder}/dp_cpsa.npy", certify('dp'))
+            # np.save(f"{result_folder}/rdp_cpsa.npy", certify('rdp'))
             np.save(f"{result_folder}/best_dp_cpsa.npy", certify('best'))
         else:
             np.save(f"{result_folder}/bagging_cpsa.npy", certify('bagging'))
     # Plot
     else:
         if not args.disable_dp:
-            cpsa_dp = np.load(f"{result_folder}/dp_cpsa.npy")
-            cpsa_rdp = np.load(f"{result_folder}/rdp_cpsa.npy")
+            # cpsa_dp = np.load(f"{result_folder}/dp_cpsa.npy")
+            # cpsa_rdp = np.load(f"{result_folder}/rdp_cpsa.npy")
             cpsa_best_dp = np.load(f"{result_folder}/best_dp_cpsa.npy")
+            # cpsa_bagging = np.load(f"{result_folder}/bagging_cpsa.npy")
             plot_certified_acc(
-                [cpsa_best_dp], f"{result_folder}/certified_acc_plot.png")
+                [cpsa_best_dp], f"{result_folder}/certified_acc_plot.png", ['DP'])
         else:
             cpsa_bagging = np.load(f"{result_folder}/bagging_cpsa.npy")
             plot_certified_acc(
-                [cpsa_bagging], f"{result_folder}/certified_acc_plot.png")
+                [cpsa_bagging], f"{result_folder}/certified_acc_plot.png", ['Bagging'])
