@@ -445,7 +445,7 @@ if __name__ == "__main__":
             # cpsa_bagging = np.load(f"{result_folder}/bagging_cpsa.npy")
     
             acc1, rad1 = certified_acc_against_radius(cpsa_best_dp, radius_range=50)
-            plot_certified_acc([acc1, acc2], [rad1, rad2], ['DP', 'DP-Baseline'], f"{result_folder}/certified_acc_plot.png")
+            plot_certified_acc([acc1], [rad1], ['DP'], f"{result_folder}/certified_acc_plot.png")
             
         elif args.method_name == 'DP-Baseline':
             clean_acc_list = np.load(f"{result_folder}/acc_list.npy")
