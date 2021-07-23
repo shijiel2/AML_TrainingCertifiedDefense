@@ -248,6 +248,12 @@ def main():
         default=0,
         help="Size of bagging",
     )
+    parser.add_argument(
+        "--load-model",
+        action="store_true",
+        default=False,
+        help="Load model not train (default: false)",
+    )
     args = parser.parse_args()
     device = torch.device(args.device)
 
@@ -322,8 +328,6 @@ def main():
         **kwargs,
     )
 
-    # collect votes from all models
-    aggregate_result = np.zeros([len(test_dataset), 10 + 1], dtype=np.int)
     # folder for this experiment 
     if not args.disable_dp:
         result_folder = (
@@ -337,9 +341,15 @@ def main():
         )
     print(f'Result folder: {result_folder}')
     Path(result_folder).mkdir(parents=True, exist_ok=True)
+    models_folder = f"{result_folder}/models"
+    Path(models_folder).mkdir(parents=True, exist_ok=True)
     # log file for this experiment
     logging.basicConfig(filename=f"{result_folder}/train.log", filemode='w', level=logging.INFO)
     logging.getLogger().addHandler(logging.StreamHandler())
+
+    # collect votes from all models
+    aggregate_result = np.zeros([len(test_dataset), 10 + 1], dtype=np.int)
+    acc_list = []
     
     for run_idx in range(args.n_runs):
         # pre-training stuff
@@ -360,10 +370,13 @@ def main():
             )
             privacy_engine.attach(optimizer)
         # training
-        for epoch in range(1, args.epochs + 1):
-            train(args, model, device, train_loader, optimizer, epoch)
-            if args.run_test:
-                test(args, model, device, test_loader)
+        if args.load_model:
+            model.load_state_dict(torch.load(f"{models_folder}/model_{run_idx}.pt"))
+        else:
+            for epoch in range(1, args.epochs + 1):
+                train(args, model, device, train_loader, optimizer, epoch)
+                if args.run_test:
+                    test(args, model, device, test_loader)
         # post-training stuff
         if run_idx == 0 and not args.disable_dp:
             rdp_alphas, rdp_epsilons = optimizer.privacy_engine.get_rdp_privacy_spent()
@@ -376,15 +389,16 @@ def main():
                 np.save(f"{result_folder}/rdp_alphas", rdp_alphas)
                 np.save(f"{result_folder}/rdp_steps", rdp_steps)
                 np.save(f"{result_folder}/dp_epsilon", dp_epsilon)
-        # save preds and model
+        # save preds
         aggregate_result[np.arange(0, len(test_dataset)), pred(args, model, device, test_dataset).cpu()] += 1
-        if args.save_model:
-            models_folder = f"{result_folder}/models"
-            Path(models_folder).mkdir(parents=True, exist_ok=True)
+        acc_list.append(test(args, model, device, test_loader))
+        # save model
+        if not args.load_model and args.save_model:
             torch.save(model.state_dict(), f"{models_folder}/model_{run_idx}.pt")
     # finish trining all models, save results
     aggregate_result[np.arange(0, len(test_dataset)), -1] = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))[1]
     np.save(f"{result_folder}/aggregate_result", aggregate_result)
+    np.save(f"{result_folder}/acc_list", acc_list)
 
 if __name__ == "__main__":
     main()

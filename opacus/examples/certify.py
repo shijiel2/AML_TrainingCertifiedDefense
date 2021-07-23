@@ -101,6 +101,12 @@ parser.add_argument(
     default=60000,
     help="Size of training set",
 )
+parser.add_argument(
+    "--method-name",
+    type=str,
+    default="DP",
+    help="Name of the methods: DP, DP-Baseline, Bagging",
+)
 args = parser.parse_args()
 
 
@@ -296,10 +302,24 @@ def certified_acc_against_radius(certified_poisoning_size_array, radius_range=50
     return certified_acc_list, certified_radius_list
 
 
-def plot_certified_acc(cpsa_list, plot_path, name_list):
+def certified_acc_against_radius_dp_baseline(clean_acc_list, dp_epsilon, dp_delta=1e-5, radius_range=50):
+    est_clean_acc = sum(clean_acc_list) / len(clean_acc_list)
+    c_bound = 1
+    def dp_baseline_certified_acc(k):
+        p1 = np.e**(-k*dp_epsilon)*(est_clean_acc + (dp_delta*c_bound)/(np.e**(dp_epsilon)-1))-(dp_delta*c_bound)/(np.e**(dp_epsilon)-1)
+        p2 = 0
+        return max(p1, p2)
+    
+    certified_radius_list = list(range(radius_range))
+    certified_acc_list = []
+    for k in range(radius_range):
+        certified_acc_list.append(dp_baseline_certified_acc(k))
+    return certified_acc_list, certified_radius_list
+
+
+def plot_certified_acc(c_acc_lists, c_rad_lists, name_list, plot_path):
     print(plot_path)
-    for cpsa, name in zip(cpsa_list, name_list):
-        c_acc_list, c_rad_list = certified_acc_against_radius(cpsa)
+    for c_acc_list, c_rad_list, name in zip(c_acc_lists, c_rad_lists, name_list):
         logging.info(f'(Rad, Acc):{list(zip(c_rad_list, c_acc_list))}')
         plt.plot(c_rad_list, c_acc_list, label=name)
     plt.xlabel('Number of poisoned training examples')
@@ -365,16 +385,18 @@ def certify(method_name):
 
 if __name__ == "__main__":
     # main folder
-    if not args.disable_dp:
+    if args.method_name in ['DP', 'DP-Baseline']:
         result_folder = (
             f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
             f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.n_runs}"
         )
-    else:
+    elif args.method_name in ['Bagging']:
         result_folder = (
             f"{args.results_folder}/Bagging_{args.model_name}_{args.lr}_{args.bagging_size}_"
             f"{args.epochs}_{args.n_runs}"
         )
+    else:
+        exit('Invalid Method name.')
     print(result_folder)
 
     # log file for this experiment
@@ -405,22 +427,32 @@ if __name__ == "__main__":
 
     # Certify
     if not args.plot:
-        if not args.disable_dp:
+        if args.method_name == 'DP':
             # np.save(f"{result_folder}/dp_cpsa.npy", certify('dp'))
             # np.save(f"{result_folder}/rdp_cpsa.npy", certify('rdp'))
             np.save(f"{result_folder}/best_dp_cpsa.npy", certify('best'))
-        else:
+        elif args.method_name == 'DP-Baseline':
+            pass
+        elif args.method_name == 'Bagging':
             np.save(f"{result_folder}/bagging_cpsa.npy", certify('bagging'))
+
     # Plot
     else:
-        if not args.disable_dp:
+        if args.method_name == 'DP':
             # cpsa_dp = np.load(f"{result_folder}/dp_cpsa.npy")
             # cpsa_rdp = np.load(f"{result_folder}/rdp_cpsa.npy")
             cpsa_best_dp = np.load(f"{result_folder}/best_dp_cpsa.npy")
             # cpsa_bagging = np.load(f"{result_folder}/bagging_cpsa.npy")
-            plot_certified_acc(
-                [cpsa_best_dp], f"{result_folder}/certified_acc_plot.png", ['DP'])
-        else:
+    
+            acc1, rad1 = certified_acc_against_radius(cpsa_best_dp, radius_range=50)
+            plot_certified_acc([acc1, acc2], [rad1, rad2], ['DP', 'DP-Baseline'], f"{result_folder}/certified_acc_plot.png")
+            
+        elif args.method_name == 'DP-Baseline':
+            clean_acc_list = np.load(f"{result_folder}/acc_list.npy")
+            acc1, rad1 = certified_acc_against_radius_dp_baseline(clean_acc_list, dp_epsilon, radius_range=50)
+            plot_certified_acc([acc1], [rad1], ['DP-Baseline'], f"{result_folder}/dp_baseline_certified_acc_plot.png")
+            
+        elif args.method_name == 'Bagging':
             cpsa_bagging = np.load(f"{result_folder}/bagging_cpsa.npy")
-            plot_certified_acc(
-                [cpsa_bagging], f"{result_folder}/certified_acc_plot.png", ['Bagging'])
+            acc1, rad1 = certified_acc_against_radius(cpsa_bagging, radius_range=50)
+            plot_certified_acc([acc1], [rad1], ['Bagging'], f"{result_folder}/certified_acc_plot.png")
