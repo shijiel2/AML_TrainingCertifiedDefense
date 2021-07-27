@@ -103,23 +103,23 @@ def train(args, model, train_loader, optimizer, epoch, device):
         else:
             optimizer.virtual_step()
 
-        if i % args.print_freq == 0:
-            if not args.disable_dp:
-                epsilon, best_alpha = optimizer.privacy_engine.get_privacy_spent(
-                    args.delta
-                )
-                print(
-                    f"\tTrain Epoch: {epoch} \t"
-                    f"Loss: {np.mean(losses):.6f} "
-                    f"Acc@1: {np.mean(top1_acc):.6f} "
-                    f"(ε = {epsilon:.2f}, δ = {args.delta}) for α = {best_alpha}"
-                )
-            else:
-                print(
-                    f"\tTrain Epoch: {epoch} \t"
-                    f"Loss: {np.mean(losses):.6f} "
-                    f"Acc@1: {np.mean(top1_acc):.6f} "
-                )
+        # if i % args.print_freq == 0:
+        #     if not args.disable_dp:
+        #         epsilon, best_alpha = optimizer.privacy_engine.get_privacy_spent(
+        #             args.delta
+        #         )
+        #         print(
+        #             f"\tTrain Epoch: {epoch} \t"
+        #             f"Loss: {np.mean(losses):.6f} "
+        #             f"Acc@1: {np.mean(top1_acc):.6f} "
+        #             f"(ε = {epsilon:.2f}, δ = {args.delta}) for α = {best_alpha}"
+        #         )
+        #     else:
+        #         print(
+        #             f"\tTrain Epoch: {epoch} \t"
+        #             f"Loss: {np.mean(losses):.6f} "
+        #             f"Acc@1: {np.mean(top1_acc):.6f} "
+        #         )
 
 
 def test(args, model, test_loader, device):
@@ -147,7 +147,7 @@ def test(args, model, test_loader, device):
 
     strv = f"\tTest set:" f"Loss: {np.mean(losses):.6f} " f"Acc@1: {top1_avg :.6f} "
     logging.info(strv)
-    return
+    return top1_avg
 
 
 def pred(args, model, test_dataset, device):
@@ -378,6 +378,12 @@ def main():
         default=False,
         help="Run test for the model (default: false)",
     )
+    parser.add_argument(
+        "--load-model",
+        action="store_true",
+        default=False,
+        help="Load model not train (default: false)",
+    )
 
     args = parser.parse_args()
 
@@ -394,6 +400,8 @@ def main():
         )
     print(f'Result folder: {result_folder}')
     Path(result_folder).mkdir(parents=True, exist_ok=True)
+    models_folder = f"{result_folder}/models"
+    Path(models_folder).mkdir(parents=True, exist_ok=True)
     logging.basicConfig(filename=f"{result_folder}/train.log", filemode='w', level=logging.INFO)
     logging.getLogger().addHandler(logging.StreamHandler())
 
@@ -505,6 +513,7 @@ def main():
     
     # collect votes from all models
     aggregate_result = np.zeros([len(test_dataset), 10 + 1], dtype=np.int)
+    acc_list = []
     
     for run_idx in range(args.n_runs):
         # Pre-training stuff for each base classifier
@@ -550,16 +559,27 @@ def main():
             privacy_engine.attach(optimizer)
         
         # Training and testing
-        for epoch in range(args.start_epoch, args.epochs + 1):
-            if args.lr_schedule == "cos":
-                lr = args.lr * 0.5 * (1 + np.cos(np.pi * epoch / (args.epochs + 1)))
-                for param_group in optimizer.param_groups:
-                    param_group["lr"] = lr
+        if args.load_model:
+            model.load_state_dict(torch.load(f"{models_folder}/model_{run_idx}.pt"))
+        else:
+            epoch_acc_epsilon = []
+            for epoch in range(args.start_epoch, args.epochs + 1):
+                if args.lr_schedule == "cos":
+                    lr = args.lr * 0.5 * (1 + np.cos(np.pi * epoch / (args.epochs + 1)))
+                    for param_group in optimizer.param_groups:
+                        param_group["lr"] = lr
 
-            train(args, model, train_loader, optimizer, epoch, device)
-            if args.run_test:
-                logging.info(f'Epoch: {epoch}')
-                test(args, model, test_loader, device)
+                train(args, model, train_loader, optimizer, epoch, device)
+                if args.run_test:
+                    logging.info(f'Epoch: {epoch}')
+                    test(args, model, test_loader, device)
+
+                if run_idx == 0:
+                    acc = test(args, model, test_loader, device)
+                    eps, _ = optimizer.privacy_engine.get_privacy_spent(args.delta)
+                    epoch_acc_epsilon.append((acc, eps))
+            if run_idx == 0:
+                np.save(f"{result_folder}/epoch_acc_eps", epoch_acc_epsilon)
             
         # Post-training stuff 
 
@@ -577,14 +597,14 @@ def main():
         
         # save preds and model
         aggregate_result[np.arange(0, len(test_dataset)), pred(args, model, test_dataset, device).cpu()] += 1
-        if args.save_model:
-            models_folder = f"{result_folder}/models"
-            Path(models_folder).mkdir(parents=True, exist_ok=True)
+        acc_list.append(test(args, model, test_loader, device))
+        if not args.load_model and args.save_model:
             torch.save(model.state_dict(), f"{models_folder}/model_{run_idx}.pt")
 
     # Finish trining all models, save results
     aggregate_result[np.arange(0, len(test_dataset)), -1] = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))[1]
     np.save(f"{result_folder}/aggregate_result", aggregate_result)
+    np.save(f"{result_folder}/acc_list", acc_list)
 
     if args.local_rank != -1:
         cleanup()

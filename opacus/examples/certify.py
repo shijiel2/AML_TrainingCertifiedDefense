@@ -15,10 +15,11 @@ import torch.nn.functional as F
 from tqdm import tqdm
 from opacus import PrivacyEngine
 import matplotlib.pyplot as plt
+import scipy.stats
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--alpha", type=str, default="0.001")
+parser.add_argument("--alpha", type=float, default="0.001")
 parser.add_argument(
     "-sr",
     "--sample-rate",
@@ -107,6 +108,12 @@ parser.add_argument(
     default="DP",
     help="Name of the methods: DP, DP-Baseline, Bagging",
 )
+parser.add_argument(
+    "--radius-range",
+    type=int,
+    default=20,
+    help="Size of training set",
+)
 args = parser.parse_args()
 
 
@@ -125,6 +132,14 @@ def multi_ci(counts, alpha):
             )
         )
     return np.array(multi_list)
+
+
+def single_ci(counts, alpha):
+    a = 1.0 * np.array(counts)
+    n = len(a)
+    m, se = np.mean(a), scipy.stats.sem(a)
+    h = se * scipy.stats.t.ppf((1 + (1 - alpha)) / 2., n-1)
+    return m, m-h, m+h
 
 
 def multi_ci_bagging(counts, alpha):
@@ -231,7 +246,7 @@ def CertifyRadiusRDP(ls, probability_bar, steps, sample_rate, sigma):
         return -1
 
     valid_radius = set()
-    for alpha in [1 + x/2 for x in range(1, 20)]:
+    for alpha in [1 + x for x in range(1, 100)]:
         # for delta in [x / 100.0 for x in range(1, 10)]:
         for delta in [0]:
             # binary search for radius
@@ -303,7 +318,8 @@ def certified_acc_against_radius(certified_poisoning_size_array, radius_range=50
 
 
 def certified_acc_against_radius_dp_baseline(clean_acc_list, dp_epsilon, dp_delta=1e-5, radius_range=50):
-    est_clean_acc = sum(clean_acc_list) / len(clean_acc_list)
+    _, est_clean_acc, _ = single_ci(clean_acc_list, args.alpha)
+    # est_clean_acc = sum(clean_acc_list) / len(clean_acc_list)
     c_bound = 1
     def dp_baseline_certified_acc(k):
         p1 = np.e**(-k*dp_epsilon)*(est_clean_acc + (dp_delta*c_bound)/(np.e**(dp_epsilon)-1))-(dp_delta*c_bound)/(np.e**(dp_epsilon)-1)
@@ -317,13 +333,13 @@ def certified_acc_against_radius_dp_baseline(clean_acc_list, dp_epsilon, dp_delt
     return certified_acc_list, certified_radius_list
 
 
-def plot_certified_acc(c_acc_lists, c_rad_lists, name_list, plot_path):
+def plot_certified_acc(c_acc_lists, c_rad_lists, name_list, plot_path, xlabel='Number of poisoned training examples', ylabel='Certified Accuracy'):
     print(plot_path)
     for c_acc_list, c_rad_list, name in zip(c_acc_lists, c_rad_lists, name_list):
         logging.info(f'(Rad, Acc):{list(zip(c_rad_list, c_acc_list))}')
         plt.plot(c_rad_list, c_acc_list, label=name)
-    plt.xlabel('Number of poisoned training examples')
-    plt.ylabel('Certified Accuracy')
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
     plt.legend(loc="upper right")
     plt.grid(True)
     plt.savefig(plot_path, bbox_inches='tight')
@@ -385,7 +401,7 @@ def certify(method_name):
 
 if __name__ == "__main__":
     # main folder
-    if args.method_name in ['DP', 'DP-Baseline']:
+    if args.method_name in ['DP', 'DP-Baseline', 'Epoch_acc_eps']:
         result_folder = (
             f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
             f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.n_runs}"
@@ -428,9 +444,9 @@ if __name__ == "__main__":
     # Certify
     if not args.plot:
         if args.method_name == 'DP':
-            # np.save(f"{result_folder}/dp_cpsa.npy", certify('dp'))
-            # np.save(f"{result_folder}/rdp_cpsa.npy", certify('rdp'))
-            np.save(f"{result_folder}/best_dp_cpsa.npy", certify('best'))
+            np.save(f"{result_folder}/dp_cpsa.npy", certify('dp'))
+            np.save(f"{result_folder}/rdp_cpsa.npy", certify('rdp'))
+            # np.save(f"{result_folder}/best_dp_cpsa.npy", certify('best'))
         elif args.method_name == 'DP-Baseline':
             pass
         elif args.method_name == 'Bagging':
@@ -439,20 +455,32 @@ if __name__ == "__main__":
     # Plot
     else:
         if args.method_name == 'DP':
-            # cpsa_dp = np.load(f"{result_folder}/dp_cpsa.npy")
-            # cpsa_rdp = np.load(f"{result_folder}/rdp_cpsa.npy")
-            cpsa_best_dp = np.load(f"{result_folder}/best_dp_cpsa.npy")
+            cpsa_dp = np.load(f"{result_folder}/dp_cpsa.npy")
+            cpsa_rdp = np.load(f"{result_folder}/rdp_cpsa.npy")
+            # cpsa_best_dp = np.load(f"{result_folder}/best_dp_cpsa.npy")
             # cpsa_bagging = np.load(f"{result_folder}/bagging_cpsa.npy")
+            clean_acc_list = np.load(f"{result_folder}/acc_list.npy")
     
-            acc1, rad1 = certified_acc_against_radius(cpsa_best_dp, radius_range=50)
-            plot_certified_acc([acc1], [rad1], ['DP'], f"{result_folder}/certified_acc_plot.png")
+            acc1, rad1 = certified_acc_against_radius(cpsa_rdp, radius_range=args.radius_range)
+            acc2, rad2 = certified_acc_against_radius(cpsa_dp, radius_range=args.radius_range)
+            acc3, rad3 = certified_acc_against_radius_dp_baseline(clean_acc_list, dp_epsilon, radius_range=args.radius_range)
+            plot_certified_acc([acc1, acc2, acc3], [rad1, rad2, rad3], ['RDP', 'DP', 'Baseline-DP'], f"{result_folder}/compare_certified_acc_plot.png")
             
         elif args.method_name == 'DP-Baseline':
             clean_acc_list = np.load(f"{result_folder}/acc_list.npy")
-            acc1, rad1 = certified_acc_against_radius_dp_baseline(clean_acc_list, dp_epsilon, radius_range=50)
+            acc1, rad1 = certified_acc_against_radius_dp_baseline(clean_acc_list, dp_epsilon, radius_range=args.radius_range)
             plot_certified_acc([acc1], [rad1], ['DP-Baseline'], f"{result_folder}/dp_baseline_certified_acc_plot.png")
             
         elif args.method_name == 'Bagging':
             cpsa_bagging = np.load(f"{result_folder}/bagging_cpsa.npy")
-            acc1, rad1 = certified_acc_against_radius(cpsa_bagging, radius_range=50)
+            acc1, rad1 = certified_acc_against_radius(cpsa_bagging, radius_range=args.radius_range)
             plot_certified_acc([acc1], [rad1], ['Bagging'], f"{result_folder}/certified_acc_plot.png")
+
+        elif args.method_name == 'Epoch_acc_eps':
+            epoch_acc_eps = np.load(f"{result_folder}/epoch_acc_eps.npy")
+            acc_list = [x[0] for x in epoch_acc_eps]
+            eps_list = [x[1] for x in epoch_acc_eps]
+            epoch_list = list(range(1, len(epoch_acc_eps)+1))
+            plot_certified_acc([acc_list], [epoch_list], ['acc'], f"{result_folder}/epoch_vs_acc.png", xlabel='Number of epochs', ylabel='Clean Accuracy')
+            plot_certified_acc([eps_list], [epoch_list], ['eps'], f"{result_folder}/epoch_vs_eps.png", xlabel='Number of epochs', ylabel='DP epsilon')
+
