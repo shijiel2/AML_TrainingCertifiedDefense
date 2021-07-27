@@ -10,8 +10,8 @@ from subprocess import Popen
 from notification import NOTIFIER
 
 
-MODE = ['ntrain', 'ncertify', 'plot', 'neval']
-DATASET = 'mnist'
+MODE = ['train', 'certify', 'nplot', 'neval']
+DATASET = 'cifar10'
 
 
 TRAIN_COMMAND = 'python {dataset}.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr} -c {c} --save-model'
@@ -25,6 +25,7 @@ CERTIFY_BAGGING_COMMAND = 'python certify.py --n-runs {n_runs} --epochs {epochs}
 PLOT_COMMAND = 'python certify.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr} -c {c} --model-name {model_name} --results-folder {results_folder} --plot --method-name DP'
 PLOT_BAGGING_COMMAND = 'python certify.py --n-runs {n_runs} --epochs {epochs} --lr {lr} -c {c} --training-size {training_size} --bagging-size {bagging_size} --model-name {model_name} --results-folder {results_folder} --disable-dp --plot --method-name Bagging'
 PLOT_DPBASELINE_COMMAND = 'python certify.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr} -c {c} --model-name {model_name} --results-folder {results_folder} --plot --method-name DP-Baseline'
+PLOT_EPOCH_ACC_EPS_COMMAND = 'python certify.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr} -c {c} --model-name {model_name} --results-folder {results_folder} --plot --method-name Epoch_acc_eps'
 
 if DATASET == 'mnist':
     results_folder = '../results/mnist'
@@ -32,7 +33,7 @@ if DATASET == 'mnist':
     training_size = 60000
     n_runss = [1000]
     epochss = [1]
-    sigmas = [1.0]
+    sigmas = [0.5 * x for x in range(2, 11)]
     sample_rates = [0.001]
     lrs = [0.1]
     clips = [1]
@@ -43,9 +44,9 @@ elif DATASET == 'cifar10':
     results_folder = '../results/cifar10'
     model_name = 'ConvNet'
     training_size = 50000
-    n_runss = [100]
-    epochss = [5]
-    sigmas = [2.5]
+    n_runss = [1000]
+    epochss = [20]
+    sigmas = [1]
     sample_rates = [0.01]
     lrs = [0.01]
     clips = [25]
@@ -91,14 +92,14 @@ if 'certify' in MODE:
     #     proc.wait()
 
 if 'plot' in MODE:
-    # DP models
-    for nr, ep, sig, sr, lr, c in itertools.product(n_runss, epochss, sigmas, sample_rates, lrs, clips): 
-        print(PLOT_COMMAND.format(
-            n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder))
-        proc = Popen(PLOT_COMMAND.format(n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder),
-                        shell=True,
-                        cwd='./')
-        proc.wait()
+    # # DP models
+    # for nr, ep, sig, sr, lr, c in itertools.product(n_runss, epochss, sigmas, sample_rates, lrs, clips): 
+    #     print(PLOT_COMMAND.format(
+    #         n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder))
+    #     proc = Popen(PLOT_COMMAND.format(n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder),
+    #                     shell=True,
+    #                     cwd='./')
+    #     proc.wait()
 
     # # Bagging models
     # for nr, ep, lr, bs, c in itertools.product(n_runss, bagging_epochss, lrs, bagging_sizes, clips):
@@ -116,6 +117,15 @@ if 'plot' in MODE:
     #                     shell=True,
     #                     cwd='./')
     #     proc.wait()
+
+    # Epoch_acc_eps
+    for nr, ep, sig, sr, lr, c in itertools.product(n_runss, epochss, sigmas, sample_rates, lrs, clips): 
+        print(PLOT_EPOCH_ACC_EPS_COMMAND.format(
+            n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder))
+        proc = Popen(PLOT_EPOCH_ACC_EPS_COMMAND.format(n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder),
+                        shell=True,
+                        cwd='./')
+        proc.wait()
 
 if 'eval' in MODE:
     # DP models
