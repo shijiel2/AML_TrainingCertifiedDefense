@@ -271,12 +271,9 @@ def CertifyRadiusRDP(ls, probability_bar, steps, sample_rate, sigma):
         # for x in valid_radius:
         #     if x[0] == max_radius:
         #         print(x)
-        if max_radius == 0:
-            return -1
-        else:
-            return max_radius
+        return max_radius
     else:
-        return -1
+        return 0
 
 
 def CertifyRadiusBS(ls, probability_bar, k, n):
@@ -350,6 +347,7 @@ def certify(method_name):
     pred_data = aggregate_result[:, :10]
     pred = np.argmax(pred_data, axis=1)
     gt = aggregate_result[:, 10]
+    logging.info(f"Clean acc: {(gt == pred).sum() / len(pred)}")
 
     certified_poisoning_size_array = np.zeros([num_data], dtype=np.int)
     delta_l, delta_s = (
@@ -401,7 +399,7 @@ def certify(method_name):
 
 if __name__ == "__main__":
     # main folder
-    if args.method_name in ['DP', 'DP-Baseline', 'Epoch_acc_eps']:
+    if args.method_name in ['DP', 'DP-Baseline', 'Epoch_acc_eps', 'Subset_acc']:
         result_folder = (
             f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
             f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.n_runs}"
@@ -446,7 +444,7 @@ if __name__ == "__main__":
         if args.method_name == 'DP':
             np.save(f"{result_folder}/dp_cpsa.npy", certify('dp'))
             np.save(f"{result_folder}/rdp_cpsa.npy", certify('rdp'))
-            # np.save(f"{result_folder}/best_dp_cpsa.npy", certify('best'))
+            # np.save(f"{result_folder}/best_dp_cpsa.npy", certify('best'))        
         elif args.method_name == 'DP-Baseline':
             pass
         elif args.method_name == 'Bagging':
@@ -483,4 +481,10 @@ if __name__ == "__main__":
             epoch_list = list(range(1, len(epoch_acc_eps)+1))
             plot_certified_acc([acc_list], [epoch_list], ['acc'], f"{result_folder}/epoch_vs_acc.png", xlabel='Number of epochs', ylabel='Clean Accuracy')
             plot_certified_acc([eps_list], [epoch_list], ['eps'], f"{result_folder}/epoch_vs_eps.png", xlabel='Number of epochs', ylabel='DP epsilon')
+
+        elif args.method_name == 'Subset_acc':
+            subset_acc = np.load(f"{result_folder}/subset_acc_list.npy")
+            subset_list = [x[0] for x in subset_acc]
+            acc_list = [x[1] for x in subset_acc]
+            plot_certified_acc([acc_list], [subset_list], ['acc'], f"{result_folder}/subset_vs_acc.png", xlabel='Size of sub-training set', ylabel='Clean Accuracy')
 

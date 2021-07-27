@@ -26,6 +26,7 @@ PLOT_COMMAND = 'python certify.py --n-runs {n_runs} --epochs {epochs} --sigma {s
 PLOT_BAGGING_COMMAND = 'python certify.py --n-runs {n_runs} --epochs {epochs} --lr {lr} -c {c} --training-size {training_size} --bagging-size {bagging_size} --model-name {model_name} --results-folder {results_folder} --disable-dp --plot --method-name Bagging'
 PLOT_DPBASELINE_COMMAND = 'python certify.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr} -c {c} --model-name {model_name} --results-folder {results_folder} --plot --method-name DP-Baseline'
 PLOT_EPOCH_ACC_EPS_COMMAND = 'python certify.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr} -c {c} --model-name {model_name} --results-folder {results_folder} --plot --method-name Epoch_acc_eps'
+PLOT_SUBSET_ACC_COMMAND = 'python certify.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr} -c {c} --model-name {model_name} --results-folder {results_folder} --plot --method-name Subset_acc'
 
 if DATASET == 'mnist':
     results_folder = '../results/mnist'
@@ -46,7 +47,7 @@ elif DATASET == 'cifar10':
     training_size = 50000
     n_runss = [1000]
     epochss = [20]
-    sigmas = [1]
+    sigmas = [1.0]
     sample_rates = [0.01]
     lrs = [0.01]
     clips = [25]
@@ -92,14 +93,14 @@ if 'certify' in MODE:
     #     proc.wait()
 
 if 'plot' in MODE:
-    # # DP models
-    # for nr, ep, sig, sr, lr, c in itertools.product(n_runss, epochss, sigmas, sample_rates, lrs, clips): 
-    #     print(PLOT_COMMAND.format(
-    #         n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder))
-    #     proc = Popen(PLOT_COMMAND.format(n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder),
-    #                     shell=True,
-    #                     cwd='./')
-    #     proc.wait()
+    # DP models
+    for nr, ep, sig, sr, lr, c in itertools.product(n_runss, epochss, sigmas, sample_rates, lrs, clips): 
+        print(PLOT_COMMAND.format(
+            n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder))
+        proc = Popen(PLOT_COMMAND.format(n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder),
+                        shell=True,
+                        cwd='./')
+        proc.wait()
 
     # # Bagging models
     # for nr, ep, lr, bs, c in itertools.product(n_runss, bagging_epochss, lrs, bagging_sizes, clips):
@@ -118,14 +119,24 @@ if 'plot' in MODE:
     #                     cwd='./')
     #     proc.wait()
 
-    # Epoch_acc_eps
+    # # Epoch_acc_eps
+    # for nr, ep, sig, sr, lr, c in itertools.product(n_runss, epochss, sigmas, sample_rates, lrs, clips): 
+    #     print(PLOT_EPOCH_ACC_EPS_COMMAND.format(
+    #         n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder))
+    #     proc = Popen(PLOT_EPOCH_ACC_EPS_COMMAND.format(n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder),
+    #                     shell=True,
+    #                     cwd='./')
+    #     proc.wait()
+
+    # Subset_acc
     for nr, ep, sig, sr, lr, c in itertools.product(n_runss, epochss, sigmas, sample_rates, lrs, clips): 
-        print(PLOT_EPOCH_ACC_EPS_COMMAND.format(
+        print(PLOT_SUBSET_ACC_COMMAND.format(
             n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder))
-        proc = Popen(PLOT_EPOCH_ACC_EPS_COMMAND.format(n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder),
+        proc = Popen(PLOT_SUBSET_ACC_COMMAND.format(n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder),
                         shell=True,
                         cwd='./')
         proc.wait()
+
 
 if 'eval' in MODE:
     # DP models
