@@ -10,7 +10,7 @@ from subprocess import Popen
 from notification import NOTIFIER
 
 
-MODE = ['train', 'certify', 'nplot', 'neval']
+MODE = ['train', 'certify', 'plot', 'neval']
 DATASET = 'cifar10'
 
 
@@ -47,7 +47,7 @@ elif DATASET == 'cifar10':
     training_size = 50000
     n_runss = [1000]
     epochss = [20]
-    sigmas = [1.0]
+    sigmas = [1.0, 2.0, 3.0, 4.0]
     sample_rates = [0.01]
     lrs = [0.01]
     clips = [25]
@@ -128,14 +128,14 @@ if 'plot' in MODE:
     #                     cwd='./')
     #     proc.wait()
 
-    # Subset_acc
-    for nr, ep, sig, sr, lr, c in itertools.product(n_runss, epochss, sigmas, sample_rates, lrs, clips): 
-        print(PLOT_SUBSET_ACC_COMMAND.format(
-            n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder))
-        proc = Popen(PLOT_SUBSET_ACC_COMMAND.format(n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder),
-                        shell=True,
-                        cwd='./')
-        proc.wait()
+    # # Subset_acc
+    # for nr, ep, sig, sr, lr, c in itertools.product(n_runss, epochss, sigmas, sample_rates, lrs, clips): 
+    #     print(PLOT_SUBSET_ACC_COMMAND.format(
+    #         n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder))
+    #     proc = Popen(PLOT_SUBSET_ACC_COMMAND.format(n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder),
+    #                     shell=True,
+    #                     cwd='./')
+    #     proc.wait()
 
 
 if 'eval' in MODE:
