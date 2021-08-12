@@ -337,7 +337,7 @@ def plot_certified_acc(c_acc_lists, c_rad_lists, name_list, plot_path, xlabel='N
         plt.plot(c_rad_list, c_acc_list, label=name)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
-    plt.legend(loc="upper right")
+    plt.legend(loc="upper left")
     plt.grid(True)
     plt.savefig(plot_path, bbox_inches='tight')
     plt.clf()
@@ -483,8 +483,14 @@ if __name__ == "__main__":
             plot_certified_acc([eps_list], [epoch_list], ['eps'], f"{result_folder}/epoch_vs_eps.png", xlabel='Number of epochs', ylabel='DP epsilon')
 
         elif args.method_name == 'Subset_acc':
-            subset_acc = np.load(f"{result_folder}/subset_acc_list.npy")
-            subset_list = [x[0] for x in subset_acc]
-            acc_list = [x[1] for x in subset_acc]
-            plot_certified_acc([acc_list], [subset_list], ['acc'], f"{result_folder}/subset_vs_acc.png", xlabel='Size of sub-training set', ylabel='Clean Accuracy')
+            acc_lists = []
+            subset_lists = []
+            for epoch in [20, 50, 100]:
+                subset_acc = np.load(f"{result_folder}/subset_acc_list_{epoch}.npy")
+                subset_list = [x[0] for x in subset_acc]
+                acc_list = [x[1] for x in subset_acc]
+                acc_lists.append(acc_list)
+                subset_lists.append(subset_list)
+                
+            plot_certified_acc(acc_lists, subset_lists, ['Epochs-20', 'Epochs-50', 'Epochs-100'], f"{result_folder}/subset_vs_acc.png", xlabel='Size of sub-training set', ylabel='Clean Accuracy')
 
