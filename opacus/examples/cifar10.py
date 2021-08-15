@@ -459,51 +459,51 @@ def main():
         transforms.ToTensor(),
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     ]
-    train_transform = transforms.Compose(
-        augmentations + normalize if args.disable_dp else normalize
-    )
 
-    test_transform = transforms.Compose(normalize)
-
-    train_dataset = CIFAR10(
-        root=args.data_root, train=True, download=True, transform=train_transform
-    )
-
-    if args.bagging_size > 0:
-        indexs = np.random.choice(len(train_dataset), args.bagging_size, replace=True)
-        train_dataset = torch.utils.data.Subset(train_dataset, indexs)
-        print(f"Sub-training dataset size {len(train_dataset)}")
-
-    if not args.disable_dp:
-        train_loader = torch.utils.data.DataLoader(
-            train_dataset,
-            num_workers=args.workers,
-            generator=generator,
-            batch_sampler=UniformWithReplacementSampler(
-                num_samples=len(train_dataset),
-                sample_rate=args.sample_rate,
+    def gen_train_dataset_loader():
+        train_transform = transforms.Compose(augmentations + normalize if args.disable_dp else normalize)
+        train_dataset = CIFAR10(
+            root=args.data_root, train=True, download=True, transform=train_transform
+        )
+        if args.bagging_size > 0:
+            indexs = np.random.choice(len(train_dataset), args.bagging_size, replace=False)
+            train_dataset = torch.utils.data.Subset(train_dataset, indexs)
+            print(f"Sub-training dataset size {len(train_dataset)}")
+        if not args.disable_dp:
+            train_loader = torch.utils.data.DataLoader(
+                train_dataset,
+                num_workers=args.workers,
                 generator=generator,
-            ),
-        )
-    else:
-        print('No Gaussian Sampler')
-        train_loader = torch.utils.data.DataLoader(
-            train_dataset,
-            num_workers=args.workers,
-            generator=generator,
-            batch_size=128,
-            shuffle=True,
-        )
+                batch_sampler=UniformWithReplacementSampler(
+                    num_samples=len(train_dataset),
+                    sample_rate=args.sample_rate,
+                    generator=generator,
+                ),
+            )
+        else:
+            print('No Gaussian Sampler')
+            train_loader = torch.utils.data.DataLoader(
+                train_dataset,
+                num_workers=args.workers,
+                generator=generator,
+                batch_size=128,
+                shuffle=True,
+            )
+        return train_dataset, train_loader
 
-    test_dataset = CIFAR10(
-        root=args.data_root, train=False, download=True, transform=test_transform
-    )
-    test_loader = torch.utils.data.DataLoader(
-        test_dataset,
-        batch_size=args.batch_size_test,
-        shuffle=False,
-        num_workers=args.workers,
-    )
+    def gen_test_dataset_loader():
+        test_transform = transforms.Compose(normalize)
+        test_dataset = CIFAR10(
+            root=args.data_root, train=False, download=True, transform=test_transform
+        )
+        test_loader = torch.utils.data.DataLoader(
+            test_dataset,
+            batch_size=args.batch_size_test,
+            shuffle=False,
+            num_workers=args.workers,
+        )
+        return test_dataset, test_loader
+    
 
     if distributed and args.device == "cuda":
         args.device = "cuda:" + str(args.local_rank)
@@ -512,6 +512,7 @@ def main():
     """ Here we go the training and testing process """
     
     # collect votes from all models
+    test_dataset, test_loader = gen_test_dataset_loader()
     aggregate_result = np.zeros([len(test_dataset), 10 + 1], dtype=np.int)
     acc_list = []
     
@@ -562,6 +563,7 @@ def main():
         if args.load_model:
             model.load_state_dict(torch.load(f"{models_folder}/model_{run_idx}.pt"))
         else:
+            _, train_loader = gen_train_dataset_loader()
             epoch_acc_epsilon = []
             for epoch in range(args.start_epoch, args.epochs + 1):
                 if args.lr_schedule == "cos":

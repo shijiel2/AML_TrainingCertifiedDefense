@@ -10,11 +10,11 @@ from subprocess import Popen
 from notification import NOTIFIER
 
 
-MODE = ['train', 'certify', 'plot', 'neval']
+MODE = ['ntrain', 'certify', 'plot', 'neval']
 DATASET = 'cifar10'
 
 
-TRAIN_COMMAND = 'python {dataset}.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr} -c {c} --save-model'
+TRAIN_COMMAND = 'python {dataset}.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr} -c {c} --save-model --bagging-size 25000'
 TRAIN_BAGGING_COMMAND = 'python {dataset}.py --n-runs {n_runs} --epochs {epochs} --lr {lr} -c {c} --bagging-size {bagging_size} --disable-dp --save-model'
 
 EVAL_COMMAND = 'python {dataset}.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr} -c {c} --load-model'

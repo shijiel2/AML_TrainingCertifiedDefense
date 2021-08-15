@@ -17,6 +17,8 @@ from opacus import PrivacyEngine
 import matplotlib.pyplot as plt
 import scipy.stats
 
+from autodp.transformer_zoo import AmplificationBySampling
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--alpha", type=float, default="0.001")
@@ -114,6 +116,24 @@ parser.add_argument(
     default=10,
     help="Size of training set",
 )
+parser.add_argument(
+    "--dp-amp-m",
+    type=int,
+    default=25000,
+    help="Size of training set",
+)
+parser.add_argument(
+    "--dp-amp-n",
+    type=int,
+    default=50000,
+    help="Size of training set",
+)
+parser.add_argument(
+    "--amplification",
+    action="store_true",
+    default=True,
+    help="use amplification in certification",
+)
 args = parser.parse_args()
 
 
@@ -151,10 +171,82 @@ def multi_ci_bagging(counts, alpha):
             min(max(counts[i], 1e-10), n-1e-10), n, alpha=alpha*2./l, method="beta"))
     return np.array(multi_list)
 
+def dp_amplify(epsilon, delta, m, n):
+    
+    mu = m / n
+    delta_new = mu * delta
+    epsilon_new = np.log(1 + mu * (np.e**epsilon - 1))
 
-def check_condition_dp(radius_value, epsilon, delta, p_l_value, p_s_value):
+    return epsilon_new, delta_new
+
+def rdp_amplify(alpha, m, n, sample_rate, sigma):
+    
+    prob = m / n
+
+    # print(f'm:{m}, n:{n}, prob:{prob}')
+
+    from autodp import utils
+
+    def func(alpha):
+        rdp = PrivacyEngine._get_renyi_divergence(sample_rate=sample_rate, noise_multiplier=sigma, alphas=[alpha])
+        eps = rdp.cpu().detach().numpy()[0]
+        return eps
+
+    def cgf(x):
+        return x * func(x+1)
+
+    def subsample_epsdelta(eps,delta,prob):
+        if prob == 0:
+            return 0,0
+        return np.log(1+prob*(np.exp(eps)-1)), prob*delta
+
+    def subsample_func_int(x):
+        # output the cgf of the subsampled mechanism
+        mm = int(x)
+        eps_inf = func(np.inf)
+
+        moments_two = 2 * np.log(prob) + utils.logcomb(mm,2) \
+                        + np.minimum(np.log(4) + func(2.0) + np.log(1-np.exp(-func(2.0))),
+                                    func(2.0) + np.minimum(np.log(2),
+                                                2 * (eps_inf+np.log(1-np.exp(-eps_inf)))))
+        moment_bound = lambda j: np.minimum(j * (eps_inf + np.log(1-np.exp(-eps_inf))),
+                                            np.log(2)) + cgf(j - 1) \
+                                    + j * np.log(prob) + utils.logcomb(mm, j)
+        moments = [moment_bound(j) for j in range(3, mm + 1, 1)]
+        return np.minimum((x-1)*func(x), utils.stable_logsumexp([0,moments_two] + moments))
+    
+    def subsample_func(x):
+        # This function returns the RDP at alpha = x
+        # RDP with the linear interpolation upper bound of the CGF
+
+        epsinf, tmp = subsample_epsdelta(func(np.inf),0,prob)
+
+        if np.isinf(x):
+            return epsinf
+        if prob == 1.0:
+            return func(x)
+
+        if (x >= 1.0) and (x <= 2.0):
+            return np.minimum(epsinf, subsample_func_int(2.0) / (2.0-1))
+        if np.equal(np.mod(x, 1), 0):
+            return np.minimum(epsinf, subsample_func_int(x) / (x-1) )
+        xc = math.ceil(x)
+        xf = math.floor(x)
+        return np.min(
+            [epsinf,func(x),
+                ((x-xf)*subsample_func_int(xc) + (1-(x-xf))*subsample_func_int(xf)) / (x-1)]
+        )
+
+    return alpha, subsample_func(alpha)
+
+
+
+def check_condition_dp(radius_value, epsilon, delta, p_l_value, p_s_value, amplification=args.amplification):
     r, e, d, pl, ps = np.float(radius_value), np.float(epsilon), np.float(
         delta), np.float(p_l_value), np.float(p_s_value)
+    
+    if amplification:
+        e, d = dp_amplify(e, d, args.dp_amp_m, args.dp_amp_n)
 
     group_eps = e * r
     group_delta = d * r
@@ -171,22 +263,20 @@ def check_condition_dp(radius_value, epsilon, delta, p_l_value, p_s_value):
         return False
 
 
-def check_condition_rdp(radius_value, epsilon, alpha, p_l_value, p_s_value):
-    k, e, a, pl, ps = np.float(radius_value), np.float(epsilon), np.float(
-        alpha), np.float(p_l_value), np.float(p_s_value)
-    if k == 0:
-        return True
+def check_condition_rdp(radius, sample_rate, steps, alpha, delta, sigma, p1, p2, amplification=args.amplification):
+    
+    sample_rate = 1 - (1 - sample_rate)**radius
 
-    c = np.log2(k)
-    if a < 2*k:
-        return False
+    if not amplification:
+        rdp = PrivacyEngine._get_renyi_divergence(
+            sample_rate=sample_rate, noise_multiplier=sigma, alphas=[alpha]) * steps
+        eps = rdp.cpu().detach().numpy()[0]
+    else:
+        _, eps = rdp_amplify(alpha, args.dp_amp_m, args.dp_amp_n, sample_rate, sigma)
 
-    ga = a / k
-    ge = e * 3**c
-
-    val = (np.e**(-ge)) * (pl**(ga/(ga-1))) - (np.e**(ge)) * (ps**((ga-1)/ga))
-
-    if val > 0:
+    import numpy as np
+    val = np.e**(-eps) * p1**(alpha/(alpha-1)) - (np.e**eps * p2)**((alpha-1)/alpha)
+    if val >= 0:
         return True
     else:
         return False
@@ -253,12 +343,12 @@ def CertifyRadiusRDP(ls, probability_bar, steps, sample_rate, sigma):
             low, high = 0, 1000
             while low <= high:
                 radius = math.ceil((low + high) / 2.0)
-                if PrivacyEngine.is_rdp_certified_radius_2(radius=radius, sample_rate=sample_rate, steps=steps, alpha=alpha, delta=delta, sigma=sigma, p1=p1, p2=p2):
+                if check_condition_rdp(radius=radius, sample_rate=sample_rate, steps=steps, alpha=alpha, delta=delta, sigma=sigma, p1=p1, p2=p2):
                     low = radius + 0.1
                 else:
                     high = radius - 1
             radius = math.floor(low)
-            if PrivacyEngine.is_rdp_certified_radius_2(radius=radius, sample_rate=sample_rate, steps=steps, alpha=alpha, delta=delta, sigma=sigma, p1=p1, p2=p2):
+            if check_condition_rdp(radius=radius, sample_rate=sample_rate, steps=steps, alpha=alpha, delta=delta, sigma=sigma, p1=p1, p2=p2):
                 valid_radius.add((radius, alpha, delta))
             elif radius == 0:
                 valid_radius.add((radius, alpha, delta))
