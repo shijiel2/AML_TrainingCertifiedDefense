@@ -6,7 +6,6 @@ Runs MNIST training with differential privacy.
 
 """
 
-from notification import NOTIFIER
 from pathlib import Path
 from tqdm import tqdm
 from torchvision import datasets, transforms
@@ -22,7 +21,7 @@ import socket
 import argparse
 import sys
 sys.path.append("../..")
-
+from notification import NOTIFIER
 
 # Precomputed characteristics of the MNIST dataset
 MNIST_MEAN = 0.1307
@@ -293,6 +292,7 @@ def main():
         test_dataset = datasets.MNIST(
             args.data_root,
             train=False,
+            download=True,
             transform=transforms.Compose(
                 [
                     transforms.ToTensor(),
@@ -356,7 +356,6 @@ def main():
                     1 + x / 10.0 for x in range(1, 100)] + list(range(12, 1500)),
                 noise_multiplier=args.sigma,
                 max_grad_norm=args.max_per_sample_grad_norm,
-                secure_rng=args.secure_rng,
             )
             privacy_engine.attach(optimizer)
 

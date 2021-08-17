@@ -10,9 +10,9 @@ from subprocess import Popen
 from notification import NOTIFIER
 
 
-MODE = ['ntrain', 'certify', 'plot', 'neval']
-DATASET = 'cifar10'
-TRAIN_MODE = 'Sub-DP' # DP, Sub-DP, Bagging
+MODE = ['ntrain', 'ncertify', 'plot', 'neval']
+DATASET = 'mnist'
+TRAIN_MODE = 'DP' # DP, Sub-DP, Bagging
 
 
 TRAIN_COMMAND = 'python {dataset}.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr} -c {c} --sub-training-size {sub_training_size} --save-model --train-mode {train_mode}'
@@ -28,13 +28,13 @@ if DATASET == 'mnist':
     results_folder = '../results/mnist'
     model_name = 'SampleConvNet'
     training_size = 60000
-    n_runss = [1000]
-    epochss = [1]
-    sigmas = [0.5 * x for x in range(2, 11)]
+    n_runss = [1]
+    epochss = [100]
+    sigmas = [0, 1, 2, 3]
     sample_rates = [0.001]
     lrs = [0.1]
     clips = [1]
-    sub_training_sizes = [900]
+    sub_training_sizes = [60000]
 
 elif DATASET == 'cifar10':
     results_folder = '../results/cifar10'

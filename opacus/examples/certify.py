@@ -17,8 +17,6 @@ from opacus import PrivacyEngine
 import matplotlib.pyplot as plt
 import scipy.stats
 
-from autodp.transformer_zoo import AmplificationBySampling
-
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--alpha", type=float, default="0.001")
@@ -217,11 +215,11 @@ def rdp_amplify(alpha, m, n, sample_rate, sigma, steps):
 
 
 
-def check_condition_dp(radius_value, epsilon, delta, p_l_value, p_s_value, amplification=args.amplification):
+def check_condition_dp(radius_value, epsilon, delta, p_l_value, p_s_value):
     r, e, d, pl, ps = np.float(radius_value), np.float(epsilon), np.float(
         delta), np.float(p_l_value), np.float(p_s_value)
     
-    if amplification:
+    if args.train_mode == 'Sub-DP':
         e, d = dp_amplify(e, d, args.sub_training_size, args.training_size)
 
     group_eps = e * r
@@ -239,15 +237,15 @@ def check_condition_dp(radius_value, epsilon, delta, p_l_value, p_s_value, ampli
         return False
 
 
-def check_condition_rdp(radius, sample_rate, steps, alpha, delta, sigma, p1, p2, amplification=args.amplification):
+def check_condition_rdp(radius, sample_rate, steps, alpha, delta, sigma, p1, p2):
     
     sample_rate = 1 - (1 - sample_rate)**radius
 
-    if not amplification:
+    if args.train_mode == 'DP':
         rdp = PrivacyEngine._get_renyi_divergence(
             sample_rate=sample_rate, noise_multiplier=sigma, alphas=[alpha]) * steps
         eps = rdp.cpu().detach().numpy()[0]
-    else:
+    elif args.train_mode == 'Sub-DP':
         _, eps = rdp_amplify(alpha, args.sub_training_size, args.training_size, sample_rate, sigma, steps)
 
     import numpy as np
