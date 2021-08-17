@@ -6,24 +6,23 @@ Runs MNIST training with differential privacy.
 
 """
 
+from notification import NOTIFIER
+from pathlib import Path
+from tqdm import tqdm
+from torchvision import datasets, transforms
+from opacus.utils.uniform_sampler import UniformWithReplacementSampler, FixedSizedUniformWithReplacementSampler
+from opacus import PrivacyEngine
+import torch.optim as optim
+import torch.nn.functional as F
+import torch.nn as nn
+import torch
+import numpy as np
+import logging
+import socket
+import argparse
 import sys
 sys.path.append("../..")
 
-import argparse
-import socket
-import logging
-
-import numpy as np
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from opacus import PrivacyEngine
-from opacus.utils.uniform_sampler import UniformWithReplacementSampler, FixedSizedUniformWithReplacementSampler
-from torchvision import datasets, transforms
-from tqdm import tqdm
-from pathlib import Path
-from notification import NOTIFIER
 
 # Precomputed characteristics of the MNIST dataset
 MNIST_MEAN = 0.1307
@@ -117,12 +116,14 @@ def test(args, model, device, test_loader):
 def pred(args, model, device, test_dataset):
     model.eval()
 
-    X, y = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))
-    X, y  = X.to(device), y.to(device)
+    X, y = next(iter(torch.utils.data.DataLoader(
+        test_dataset, batch_size=len(test_dataset))))
+    X, y = X.to(device), y.to(device)
 
     y_pred = model(X).max(1)[1]
 
     return y_pred
+
 
 def main():
     # Training settings
@@ -188,13 +189,6 @@ def main():
         help="Target delta (default: 1e-5)",
     )
     parser.add_argument(
-        "--sub-training-ratio",
-        type=float,
-        default=1.0,
-        metavar="C",
-        help="Ratio of sub-training set (default 1.0)",
-    )
-    parser.add_argument(
         "--device",
         type=str,
         default="cuda",
@@ -205,18 +199,6 @@ def main():
         action="store_true",
         default=False,
         help="Save the trained model (default: false)",
-    )
-    parser.add_argument(
-        "--disable-dp",
-        action="store_true",
-        default=False,
-        help="Disable privacy training and just train with vanilla SGD",
-    )
-    parser.add_argument(
-        "--secure-rng",
-        action="store_true",
-        default=False,
-        help="Enable Secure RNG to have trustworthy privacy guarantees. Comes at a performance cost",
     )
     parser.add_argument(
         "--run-test",
@@ -243,7 +225,7 @@ def main():
         help="Name of the model",
     )
     parser.add_argument(
-        "--bagging-size",
+        "--sub-training-size",
         type=int,
         default=0,
         help="Size of bagging",
@@ -254,103 +236,110 @@ def main():
         default=False,
         help="Load model not train (default: false)",
     )
+    parser.add_argument(
+        "--train-mode",
+        type=str,
+        default="DP",
+        help="Mode of training: DP, Bagging, Sub-DP",
+    )
     args = parser.parse_args()
     device = torch.device(args.device)
-
     kwargs = {"num_workers": 1, "pin_memory": True}
 
-    if args.secure_rng:
-        try:
-            import torchcsprng as prng
-        except ImportError as e:
-            msg = (
-                "To use secure RNG, you must install the torchcsprng package! "
-                "Check out the instructions here: https://github.com/pytorch/csprng#installation"
-            )
-            raise ImportError(msg) from e
-
-        generator = prng.create_random_device_generator("/dev/urandom")
-
-    else:
-        generator = None
-
-    train_dataset = datasets.MNIST(
-        args.data_root,
-        train=True,
-        download=True,
-        transform=transforms.Compose(
-            [
-                transforms.ToTensor(),
-                transforms.Normalize((MNIST_MEAN,), (MNIST_STD,)),
-            ]
-        ),
-    )
-
-    if args.bagging_size > 0:
-        indexs = np.random.choice(len(train_dataset), args.bagging_size, replace=True)
-        train_dataset = torch.utils.data.Subset(train_dataset, indexs)
-        print(f"new train dataset size {len(train_dataset)}")
-
-    test_dataset = datasets.MNIST(
-        args.data_root,
-        train=False,
-        transform=transforms.Compose(
-            [
-                transforms.ToTensor(),
-                transforms.Normalize((MNIST_MEAN,), (MNIST_STD,)),
-            ]
-        ),
-    )
-
-    if not args.disable_dp:
-        train_loader = torch.utils.data.DataLoader(
-            train_dataset,
-            generator=generator,
-            batch_sampler=UniformWithReplacementSampler(
-                num_samples=len(train_dataset),
-                sample_rate=args.sample_rate,
-                generator=generator,
+    def gen_train_dataset_loader():
+        train_dataset = datasets.MNIST(
+            args.data_root,
+            train=True,
+            download=True,
+            transform=transforms.Compose(
+                [
+                    transforms.ToTensor(),
+                    transforms.Normalize((MNIST_MEAN,), (MNIST_STD,)),
+                ]
             ),
-            **kwargs,
         )
-    else:
-        print('No Gaussian Sampler')
-        train_loader = torch.utils.data.DataLoader(
-            train_dataset,
-            batch_size=32,
+
+        if args.train_mode == 'Bagging':
+            indexs = np.random.choice(len(train_dataset), args.sub_training_size, replace=True)
+            train_dataset = torch.utils.data.Subset(train_dataset, indexs)
+            print(f"new train dataset size {len(train_dataset)}")
+        elif args.train_mode == 'Sub-DP':
+            indexs = np.random.choice(len(train_dataset), args.sub_training_size, replace=False)
+            train_dataset = torch.utils.data.Subset(train_dataset, indexs)
+            print(f"new train dataset size {len(train_dataset)}")
+
+        if args.train_mode in ['DP', 'Sub-DP']:
+            train_loader = torch.utils.data.DataLoader(
+                train_dataset,
+                generator=None,
+                batch_sampler=UniformWithReplacementSampler(
+                    num_samples=len(train_dataset),
+                    sample_rate=args.sample_rate,
+                    generator=None,
+                ),
+                **kwargs,
+            )
+        else:
+            print('No Gaussian Sampler')
+            train_loader = torch.utils.data.DataLoader(
+                train_dataset,
+                batch_size=32,
+                shuffle=True,
+                **kwargs,
+            )
+        return train_dataset, train_loader
+
+    def gen_test_dataset_loader():
+        test_dataset = datasets.MNIST(
+            args.data_root,
+            train=False,
+            transform=transforms.Compose(
+                [
+                    transforms.ToTensor(),
+                    transforms.Normalize((MNIST_MEAN,), (MNIST_STD,)),
+                ]
+            ),
+        )
+
+        test_loader = torch.utils.data.DataLoader(
+            test_dataset,
+            batch_size=args.test_batch_size,
             shuffle=True,
             **kwargs,
         )
-    test_loader = torch.utils.data.DataLoader(
-        test_dataset,
-        batch_size=args.test_batch_size,
-        shuffle=True,
-        **kwargs,
-    )
 
-    # folder for this experiment 
-    if not args.disable_dp:
+        return test_dataset, test_loader
+
+    # folder for this experiment
+    if args.train_mode == 'DP':
         result_folder = (
             f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
             f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.n_runs}"
         )
-    else:
+    elif args.train_mode == 'Bagging':
         result_folder = (
-            f"{args.results_folder}/Bagging_{args.model_name}_{args.lr}_{args.bagging_size}_"
+            f"{args.results_folder}/Bagging_{args.model_name}_{args.lr}_{args.sub_training_size}_"
             f"{args.epochs}_{args.n_runs}"
         )
+    elif args.train_mode == 'Sub-DP':
+        result_folder = (
+            f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
+            f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.sub_training_size}_{args.n_runs}"
+        )
     print(f'Result folder: {result_folder}')
-    Path(result_folder).mkdir(parents=True, exist_ok=True)
     models_folder = f"{result_folder}/models"
     Path(models_folder).mkdir(parents=True, exist_ok=True)
+
     # log file for this experiment
-    logging.basicConfig(filename=f"{result_folder}/train.log", filemode='w', level=logging.INFO)
+    logging.basicConfig(
+        filename=f"{result_folder}/train.log", filemode='w', level=logging.INFO)
     logging.getLogger().addHandler(logging.StreamHandler())
 
     # collect votes from all models
+    test_dataset, test_loader = gen_test_dataset_loader()
     aggregate_result = np.zeros([len(test_dataset), 10 + 1], dtype=np.int)
     acc_list = []
-    
+
     for run_idx in range(args.n_runs):
         # pre-training stuff
         if args.model_name == 'SampleConvNet':
@@ -359,46 +348,66 @@ def main():
             logging.warn(f"Model name {args.model_name} invaild.")
             exit()
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0)
-        if not args.disable_dp:
+        if args.train_mode in ['DP', 'Sub-DP']:
             privacy_engine = PrivacyEngine(
                 model,
                 sample_rate=args.sample_rate,
-                alphas=[1 + x / 10.0 for x in range(1, 100)] + list(range(12, 1500)),
+                alphas=[
+                    1 + x / 10.0 for x in range(1, 100)] + list(range(12, 1500)),
                 noise_multiplier=args.sigma,
                 max_grad_norm=args.max_per_sample_grad_norm,
                 secure_rng=args.secure_rng,
             )
             privacy_engine.attach(optimizer)
+
         # training
         if args.load_model:
-            model.load_state_dict(torch.load(f"{models_folder}/model_{run_idx}.pt"))
+            model.load_state_dict(torch.load(
+                f"{models_folder}/model_{run_idx}.pt"))
         else:
+            _, train_loader = gen_train_dataset_loader()
+            epoch_acc_epsilon = []
             for epoch in range(1, args.epochs + 1):
                 train(args, model, device, train_loader, optimizer, epoch)
                 if args.run_test:
                     test(args, model, device, test_loader)
+                if run_idx == 0:
+                    acc = test(args, model, device, test_loader)
+                    if args.train_mode in ['DP', 'Sub-DP']:
+                        eps, _ = optimizer.privacy_engine.get_privacy_spent(args.delta)
+                        epoch_acc_epsilon.append((acc, eps))    
+            if run_idx == 0:
+                np.save(f"{result_folder}/epoch_acc_eps", epoch_acc_epsilon)
+                
         # post-training stuff
-        if run_idx == 0 and not args.disable_dp:
+        if run_idx == 0 and args.train_mode in ['DP', 'Sub-DP']:
             rdp_alphas, rdp_epsilons = optimizer.privacy_engine.get_rdp_privacy_spent()
-            dp_epsilon, best_alpha = optimizer.privacy_engine.get_privacy_spent(args.delta)
+            dp_epsilon, best_alpha = optimizer.privacy_engine.get_privacy_spent(
+                args.delta)
             rdp_steps = optimizer.privacy_engine.steps
-            logging.info(f"epsilon {dp_epsilon}, best_alpha {best_alpha}, steps {rdp_steps}")
-            print(f"epsilon {dp_epsilon}, best_alpha {best_alpha}, steps {rdp_steps}")
+            logging.info(
+                f"epsilon {dp_epsilon}, best_alpha {best_alpha}, steps {rdp_steps}")
+            print(
+                f"epsilon {dp_epsilon}, best_alpha {best_alpha}, steps {rdp_steps}")
             if args.save_model:
                 np.save(f"{result_folder}/rdp_epsilons", rdp_epsilons)
                 np.save(f"{result_folder}/rdp_alphas", rdp_alphas)
                 np.save(f"{result_folder}/rdp_steps", rdp_steps)
                 np.save(f"{result_folder}/dp_epsilon", dp_epsilon)
         # save preds
-        aggregate_result[np.arange(0, len(test_dataset)), pred(args, model, device, test_dataset).cpu()] += 1
+        aggregate_result[np.arange(0, len(test_dataset)), pred(
+            args, model, device, test_dataset).cpu()] += 1
         acc_list.append(test(args, model, device, test_loader))
         # save model
         if not args.load_model and args.save_model:
-            torch.save(model.state_dict(), f"{models_folder}/model_{run_idx}.pt")
+            torch.save(model.state_dict(),
+                       f"{models_folder}/model_{run_idx}.pt")
     # finish trining all models, save results
-    aggregate_result[np.arange(0, len(test_dataset)), -1] = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))[1]
+    aggregate_result[np.arange(0, len(test_dataset)), -1] = next(
+        iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))[1]
     np.save(f"{result_folder}/aggregate_result", aggregate_result)
     np.save(f"{result_folder}/acc_list", acc_list)
+
 
 if __name__ == "__main__":
     main()

@@ -87,28 +87,16 @@ parser.add_argument(
     help="plot the certified acc",
 )
 parser.add_argument(
-    "--bagging-size",
-    type=int,
-    default=0,
-    help="Size of bagging",
-)
-parser.add_argument(
-    "--disable-dp",
-    action="store_true",
-    default=False,
-    help="Disable privacy training and just train with vanilla SGD",
-)
-parser.add_argument(
     "--training-size",
     type=int,
     default=60000,
     help="Size of training set",
 )
 parser.add_argument(
-    "--method-name",
+    "--train-mode",
     type=str,
     default="DP",
-    help="Name of the methods: DP, DP-Baseline, Bagging",
+    help="Name of the methods: DP, Sub-DP, Bagging",
 )
 parser.add_argument(
     "--radius-range",
@@ -117,22 +105,10 @@ parser.add_argument(
     help="Size of training set",
 )
 parser.add_argument(
-    "--dp-amp-m",
+    "--sub-training-size",
     type=int,
-    default=25000,
+    default=30000,
     help="Size of training set",
-)
-parser.add_argument(
-    "--dp-amp-n",
-    type=int,
-    default=50000,
-    help="Size of training set",
-)
-parser.add_argument(
-    "--amplification",
-    action="store_true",
-    default=True,
-    help="use amplification in certification",
 )
 args = parser.parse_args()
 
@@ -179,7 +155,7 @@ def dp_amplify(epsilon, delta, m, n):
 
     return epsilon_new, delta_new
 
-def rdp_amplify(alpha, m, n, sample_rate, sigma):
+def rdp_amplify(alpha, m, n, sample_rate, sigma, steps):
     
     prob = m / n
 
@@ -188,7 +164,7 @@ def rdp_amplify(alpha, m, n, sample_rate, sigma):
     from autodp import utils
 
     def func(alpha):
-        rdp = PrivacyEngine._get_renyi_divergence(sample_rate=sample_rate, noise_multiplier=sigma, alphas=[alpha])
+        rdp = PrivacyEngine._get_renyi_divergence(sample_rate=sample_rate, noise_multiplier=sigma, alphas=[alpha]) * steps
         eps = rdp.cpu().detach().numpy()[0]
         return eps
 
@@ -246,7 +222,7 @@ def check_condition_dp(radius_value, epsilon, delta, p_l_value, p_s_value, ampli
         delta), np.float(p_l_value), np.float(p_s_value)
     
     if amplification:
-        e, d = dp_amplify(e, d, args.dp_amp_m, args.dp_amp_n)
+        e, d = dp_amplify(e, d, args.sub_training_size, args.training_size)
 
     group_eps = e * r
     group_delta = d * r
@@ -272,7 +248,7 @@ def check_condition_rdp(radius, sample_rate, steps, alpha, delta, sigma, p1, p2,
             sample_rate=sample_rate, noise_multiplier=sigma, alphas=[alpha]) * steps
         eps = rdp.cpu().detach().numpy()[0]
     else:
-        _, eps = rdp_amplify(alpha, args.dp_amp_m, args.dp_amp_n, sample_rate, sigma)
+        _, eps = rdp_amplify(alpha, args.sub_training_size, args.training_size, sample_rate, sigma, steps)
 
     import numpy as np
     val = np.e**(-eps) * p1**(alpha/(alpha-1)) - (np.e**eps * p2)**((alpha-1)/alpha)
@@ -468,7 +444,7 @@ def certify(method_name):
                 ls, probability_bar_copy, rdp_steps, args.sample_rate, args.sigma)
             rd = max(rd1, rd2)
         elif method_name == 'bagging':
-            rd = CertifyRadiusBS(ls, probability_bar, args.bagging_size, args.training_size)
+            rd = CertifyRadiusBS(ls, probability_bar, args.sub_training_size, args.training_size)
         else:
             logging.warn(f'Invalid certify method name {method_name}')
             exit(1)
@@ -489,15 +465,20 @@ def certify(method_name):
 
 if __name__ == "__main__":
     # main folder
-    if args.method_name in ['DP', 'DP-Baseline', 'Epoch_acc_eps', 'Subset_acc']:
+    if args.train_mode == 'DP':
         result_folder = (
             f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
             f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.n_runs}"
         )
-    elif args.method_name in ['Bagging']:
+    elif args.train_mode == 'Bagging':
         result_folder = (
-            f"{args.results_folder}/Bagging_{args.model_name}_{args.lr}_{args.bagging_size}_"
+            f"{args.results_folder}/Bagging_{args.model_name}_{args.lr}_{args.sub_training_size}_"
             f"{args.epochs}_{args.n_runs}"
+        )
+    elif args.train_mode == 'Sub-DP':
+        result_folder = (
+            f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
+            f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.sub_training_size}_{args.n_runs}"
         )
     else:
         exit('Invalid Method name.')
@@ -513,7 +494,7 @@ if __name__ == "__main__":
     num_class = aggregate_result.shape[1] - 1
     num_data = aggregate_result.shape[0]
 
-    if not args.disable_dp:
+    if args.train_mode in ['DP', 'Sub-DP']:
         dp_epsilon = np.load(f"{result_folder}/dp_epsilon.npy")
         rdp_alphas = np.load(f"{result_folder}/rdp_alphas.npy")
         rdp_epsilons = np.load(f"{result_folder}/rdp_epsilons.npy")
@@ -531,18 +512,16 @@ if __name__ == "__main__":
 
     # Certify
     if not args.plot:
-        if args.method_name == 'DP':
+        if args.train_mode in ['DP', 'Sub-DP']:
             np.save(f"{result_folder}/dp_cpsa.npy", certify('dp'))
             np.save(f"{result_folder}/rdp_cpsa.npy", certify('rdp'))
             # np.save(f"{result_folder}/best_dp_cpsa.npy", certify('best'))        
-        elif args.method_name == 'DP-Baseline':
-            pass
-        elif args.method_name == 'Bagging':
+        elif args.train_mode == 'Bagging':
             np.save(f"{result_folder}/bagging_cpsa.npy", certify('bagging'))
 
     # Plot
     else:
-        if args.method_name == 'DP':
+        if args.train_mode in ['DP', 'Sub-DP']:
             cpsa_dp = np.load(f"{result_folder}/dp_cpsa.npy")
             cpsa_rdp = np.load(f"{result_folder}/rdp_cpsa.npy")
             # cpsa_best_dp = np.load(f"{result_folder}/best_dp_cpsa.npy")
@@ -554,33 +533,27 @@ if __name__ == "__main__":
             acc3, rad3 = certified_acc_against_radius_dp_baseline(clean_acc_list, dp_epsilon, radius_range=args.radius_range)
             plot_certified_acc([acc1, acc2, acc3], [rad1, rad2, rad3], ['RDP', 'DP', 'Baseline-DP'], f"{result_folder}/compare_certified_acc_plot.png")
             
-        elif args.method_name == 'DP-Baseline':
-            clean_acc_list = np.load(f"{result_folder}/acc_list.npy")
-            acc1, rad1 = certified_acc_against_radius_dp_baseline(clean_acc_list, dp_epsilon, radius_range=args.radius_range)
-            plot_certified_acc([acc1], [rad1], ['DP-Baseline'], f"{result_folder}/dp_baseline_certified_acc_plot.png")
-            
-        elif args.method_name == 'Bagging':
+        elif args.train_mode == 'Bagging':
             cpsa_bagging = np.load(f"{result_folder}/bagging_cpsa.npy")
             acc1, rad1 = certified_acc_against_radius(cpsa_bagging, radius_range=args.radius_range)
             plot_certified_acc([acc1], [rad1], ['Bagging'], f"{result_folder}/certified_acc_plot.png")
 
-        elif args.method_name == 'Epoch_acc_eps':
-            epoch_acc_eps = np.load(f"{result_folder}/epoch_acc_eps.npy")
-            acc_list = [x[0] for x in epoch_acc_eps]
-            eps_list = [x[1] for x in epoch_acc_eps]
-            epoch_list = list(range(1, len(epoch_acc_eps)+1))
-            plot_certified_acc([acc_list], [epoch_list], ['acc'], f"{result_folder}/epoch_vs_acc.png", xlabel='Number of epochs', ylabel='Clean Accuracy')
-            plot_certified_acc([eps_list], [epoch_list], ['eps'], f"{result_folder}/epoch_vs_eps.png", xlabel='Number of epochs', ylabel='DP epsilon')
+        # # Optional "epoch V.S. acc" and "epoch V.S. eps" plots
+        # epoch_acc_eps = np.load(f"{result_folder}/epoch_acc_eps.npy")
+        # acc_list = [x[0] for x in epoch_acc_eps]
+        # eps_list = [x[1] for x in epoch_acc_eps]
+        # epoch_list = list(range(1, len(epoch_acc_eps)+1))
+        # plot_certified_acc([acc_list], [epoch_list], ['acc'], f"{result_folder}/epoch_vs_acc.png", xlabel='Number of epochs', ylabel='Clean Accuracy')
+        # plot_certified_acc([eps_list], [epoch_list], ['eps'], f"{result_folder}/epoch_vs_eps.png", xlabel='Number of epochs', ylabel='DP epsilon')
 
-        elif args.method_name == 'Subset_acc':
-            acc_lists = []
-            subset_lists = []
-            for epoch in [20, 50, 100]:
-                subset_acc = np.load(f"{result_folder}/subset_acc_list_{epoch}.npy")
-                subset_list = [x[0] for x in subset_acc]
-                acc_list = [x[1] for x in subset_acc]
-                acc_lists.append(acc_list)
-                subset_lists.append(subset_list)
-                
-            plot_certified_acc(acc_lists, subset_lists, ['Epochs-20', 'Epochs-50', 'Epochs-100'], f"{result_folder}/subset_vs_acc.png", xlabel='Size of sub-training set', ylabel='Clean Accuracy')
+        # # Optional "sub-training-size V.S. acc" plot
+        # acc_lists = []
+        # subset_lists = []
+        # for epoch in [20, 50, 100]:
+        #     subset_acc = np.load(f"{result_folder}/subset_acc_list_{epoch}.npy")
+        #     subset_list = [x[0] for x in subset_acc]
+        #     acc_list = [x[1] for x in subset_acc]
+        #     acc_lists.append(acc_list)
+        #     subset_lists.append(subset_list)
+        # plot_certified_acc(acc_lists, subset_lists, ['Epochs-20', 'Epochs-50', 'Epochs-100'], f"{result_folder}/subset_vs_acc.png", xlabel='Size of sub-training set', ylabel='Clean Accuracy')
 

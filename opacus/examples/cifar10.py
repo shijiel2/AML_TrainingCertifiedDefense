@@ -290,12 +290,6 @@ def main():
         help="Clip per-sample gradients to this norm (default 1.0)",
     )
     parser.add_argument(
-        "--disable-dp",
-        action="store_true",
-        default=False,
-        help="Disable privacy training and just train with vanilla SGD",
-    )
-    parser.add_argument(
         "--secure-rng",
         action="store_true",
         default=False,
@@ -353,7 +347,7 @@ def main():
         help="Where CIFAR10 results is/will be stored",
     )
     parser.add_argument(
-        "--bagging-size",
+        "--sub-training-size",
         type=int,
         default=0,
         help="Size of bagging",
@@ -384,24 +378,36 @@ def main():
         default=False,
         help="Load model not train (default: false)",
     )
+    parser.add_argument(
+        "--train-mode",
+        type=str,
+        default="DP",
+        help="Train mode: DP, Sub-DP, Bagging",
+    )
 
     args = parser.parse_args()
 
     # folder path
-    if not args.disable_dp:
+    if args.train_mode == 'DP':
         result_folder = (
             f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
             f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.n_runs}"
         )
-    else:
+    elif args.train_mode == 'Bagging':
         result_folder = (
-            f"{args.results_folder}/Bagging_{args.model_name}_{args.lr}_{args.bagging_size}_"
+            f"{args.results_folder}/Bagging_{args.model_name}_{args.lr}_{args.sub_training_size}_"
             f"{args.epochs}_{args.n_runs}"
         )
+    elif args.train_mode == 'Sub-DP':
+        result_folder = (
+            f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
+            f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.sub_training_size}_{args.n_runs}"
+        )
     print(f'Result folder: {result_folder}')
-    Path(result_folder).mkdir(parents=True, exist_ok=True)
     models_folder = f"{result_folder}/models"
     Path(models_folder).mkdir(parents=True, exist_ok=True)
+
+    # logging
     logging.basicConfig(filename=f"{result_folder}/train.log", filemode='w', level=logging.INFO)
     logging.getLogger().addHandler(logging.StreamHandler())
 
@@ -410,7 +416,7 @@ def main():
         setup()
         distributed = True
 
-    if args.disable_dp and args.n_accumulation_steps > 1:
+    if args.train_mode == 'Bagging' and args.n_accumulation_steps > 1:
         raise ValueError("Virtual steps only works with enabled DP")
 
     # The following few lines, enable stats gathering about the run
@@ -461,15 +467,20 @@ def main():
     ]
 
     def gen_train_dataset_loader():
-        train_transform = transforms.Compose(augmentations + normalize if args.disable_dp else normalize)
+        train_transform = transforms.Compose(augmentations + normalize if args.train_mode == 'Bagging' else normalize)
         train_dataset = CIFAR10(
             root=args.data_root, train=True, download=True, transform=train_transform
         )
-        if args.bagging_size > 0:
-            indexs = np.random.choice(len(train_dataset), args.bagging_size, replace=False)
+        if args.train_mode == 'Bagging':
+            indexs = np.random.choice(len(train_dataset), args.sub_training_size, replace=True)
             train_dataset = torch.utils.data.Subset(train_dataset, indexs)
             print(f"Sub-training dataset size {len(train_dataset)}")
-        if not args.disable_dp:
+        elif args.train_mode == 'Sub-DP':
+            indexs = np.random.choice(len(train_dataset), args.sub_training_size, replace=False)
+            train_dataset = torch.utils.data.Subset(train_dataset, indexs)
+            print(f"Sub-training dataset size {len(train_dataset)}")
+        
+        if args.train_mode in ['DP', 'Sub-DP']:
             train_loader = torch.utils.data.DataLoader(
                 train_dataset,
                 num_workers=args.workers,
@@ -526,7 +537,7 @@ def main():
         else:
             exit(f'Model name {args.model_name} invaild.')
         if distributed:
-            if not args.disable_dp:
+            if args.train_mode == 'Bagging':
                 model = DPDDP(model)
             else:
                 model = DDP(model, device_ids=[args.local_rank])
@@ -547,7 +558,7 @@ def main():
             raise NotImplementedError("Optimizer not recognized. Please check spelling")
 
         # Define the DP engine
-        if not args.disable_dp:
+        if args.train_mode in ['DP', 'Sub-DP']:
             privacy_engine = PrivacyEngine(
                 model,
                 sample_rate=args.sample_rate * args.n_accumulation_steps,
@@ -578,15 +589,16 @@ def main():
 
                 if run_idx == 0:
                     acc = test(args, model, test_loader, device)
-                    eps, _ = optimizer.privacy_engine.get_privacy_spent(args.delta)
-                    epoch_acc_epsilon.append((acc, eps))
+                    if args.train_mode in ['DP', 'Sub-DP']:
+                        eps, _ = optimizer.privacy_engine.get_privacy_spent(args.delta)
+                        epoch_acc_epsilon.append((acc, eps))
             if run_idx == 0:
                 np.save(f"{result_folder}/epoch_acc_eps", epoch_acc_epsilon)
             
         # Post-training stuff 
 
         # save the DP related data
-        if run_idx == 0 and not args.disable_dp:
+        if run_idx == 0 and args.train_mode in ['DP', 'Sub-DP']:
             rdp_alphas, rdp_epsilons = optimizer.privacy_engine.get_rdp_privacy_spent()
             dp_epsilon, best_alpha = optimizer.privacy_engine.get_privacy_spent(args.delta)
             rdp_steps = optimizer.privacy_engine.steps
