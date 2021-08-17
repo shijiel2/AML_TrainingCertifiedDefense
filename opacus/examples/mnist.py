@@ -101,14 +101,6 @@ def test(args, model, device, test_loader):
             100.0 * correct / len(test_loader.dataset),
         )
     )
-    print(
-        "\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)\n".format(
-            test_loss,
-            correct,
-            len(test_loader.dataset),
-            100.0 * correct / len(test_loader.dataset),
-        )
-    )
     return correct / len(test_loader.dataset)
 
 
@@ -236,6 +228,12 @@ def main():
         help="Load model not train (default: false)",
     )
     parser.add_argument(
+        "--sub-acc-test",
+        action="store_true",
+        default=False,
+        help="Test subset V.S. acc (default: false)",
+    )
+    parser.add_argument(
         "--train-mode",
         type=str,
         default="DP",
@@ -245,7 +243,13 @@ def main():
     device = torch.device(args.device)
     kwargs = {"num_workers": 1, "pin_memory": True}
 
-    def gen_train_dataset_loader():
+    def gen_sub_dataset(dataset, sub_training_size, with_replacement):
+        indexs = np.random.choice(len(dataset), sub_training_size, replace=with_replacement)
+        dataset = torch.utils.data.Subset(dataset, indexs)
+        print(f"Sub-dataset size {len(dataset)}")
+        return dataset
+
+    def gen_train_dataset_loader(or_sub_training_size=None):
         train_dataset = datasets.MNIST(
             args.data_root,
             train=True,
@@ -258,14 +262,14 @@ def main():
             ),
         )
 
-        if args.train_mode == 'Bagging':
-            indexs = np.random.choice(len(train_dataset), args.sub_training_size, replace=True)
-            train_dataset = torch.utils.data.Subset(train_dataset, indexs)
-            print(f"new train dataset size {len(train_dataset)}")
-        elif args.train_mode == 'Sub-DP':
-            indexs = np.random.choice(len(train_dataset), args.sub_training_size, replace=False)
-            train_dataset = torch.utils.data.Subset(train_dataset, indexs)
-            print(f"new train dataset size {len(train_dataset)}")
+        # Generate sub-training dataset if necessary
+        if or_sub_training_size is not None:
+            train_dataset = gen_sub_dataset(train_dataset, or_sub_training_size, False)
+        else:
+            if args.train_mode == 'Bagging':
+                train_dataset = gen_sub_dataset(train_dataset, args.sub_training_size, True)
+            elif args.train_mode == 'Sub-DP':
+                train_dataset = gen_sub_dataset(train_dataset, args.sub_training_size, False)
 
         if args.train_mode in ['DP', 'Sub-DP']:
             train_loader = torch.utils.data.DataLoader(
@@ -339,6 +343,10 @@ def main():
     test_dataset, test_loader = gen_test_dataset_loader()
     aggregate_result = np.zeros([len(test_dataset), 10 + 1], dtype=np.int)
     acc_list = []
+    
+    # # use this code for "sub_training_size V.S. acc"
+    if args.sub_acc_test:
+        sub_acc_list = []
 
     for run_idx in range(args.n_runs):
         # pre-training stuff
@@ -364,7 +372,12 @@ def main():
             model.load_state_dict(torch.load(
                 f"{models_folder}/model_{run_idx}.pt"))
         else:
-            _, train_loader = gen_train_dataset_loader()
+            # use this code for "sub_training_size V.S. acc"
+            if args.sub_acc_test:
+                sub_training_size = int(60000 - 60000 / args.n_runs * run_idx)
+                _, train_loader = gen_train_dataset_loader(sub_training_size)
+            else:
+                _, train_loader = gen_train_dataset_loader()
             epoch_acc_epsilon = []
             for epoch in range(1, args.epochs + 1):
                 train(args, model, device, train_loader, optimizer, epoch)
@@ -377,7 +390,11 @@ def main():
                         epoch_acc_epsilon.append((acc, eps))    
             if run_idx == 0:
                 np.save(f"{result_folder}/epoch_acc_eps", epoch_acc_epsilon)
-                
+        
+        # use this code for "sub_training_size V.S. acc"
+        if args.sub_acc_test:
+            sub_acc_list.append((sub_training_size, test(args, model, device, test_loader)))
+
         # post-training stuff
         if run_idx == 0 and args.train_mode in ['DP', 'Sub-DP']:
             rdp_alphas, rdp_epsilons = optimizer.privacy_engine.get_rdp_privacy_spent()
@@ -406,6 +423,10 @@ def main():
         iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))[1]
     np.save(f"{result_folder}/aggregate_result", aggregate_result)
     np.save(f"{result_folder}/acc_list", acc_list)
+
+    # use this code for "sub_training_size V.S. acc"
+    if args.sub_acc_test:
+        np.save(f"{result_folder}/subset_acc_list", sub_acc_list)
 
 
 if __name__ == "__main__":

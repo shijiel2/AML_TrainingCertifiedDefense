@@ -10,7 +10,7 @@ from subprocess import Popen
 from notification import NOTIFIER
 
 
-MODE = ['ntrain', 'ncertify', 'plot', 'neval']
+MODE = ['ntrain', 'ncertify', 'nplot', 'neval', 'sub-acc-test']
 DATASET = 'mnist'
 TRAIN_MODE = 'DP' # DP, Sub-DP, Bagging
 
@@ -23,14 +23,15 @@ CERTIFY_COMMAND = 'python certify.py --n-runs {n_runs} --epochs {epochs} --sigma
 
 PLOT_COMMAND = 'python certify.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr} -c {c} --model-name {model_name} --results-folder {results_folder} --training-size {training_size} --sub-training-size {sub_training_size} --train-mode {train_mode} --plot'
 
+TRAIN_SUBSET_ACC = 'python {dataset}.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr} -c {c} --sub-training-size {sub_training_size} --save-model --train-mode {train_mode} --sub-acc-test'
 
 if DATASET == 'mnist':
     results_folder = '../results/mnist'
     model_name = 'SampleConvNet'
     training_size = 60000
-    n_runss = [1]
-    epochss = [100]
-    sigmas = [0, 1, 2, 3]
+    n_runss = [100]
+    epochss = [1]
+    sigmas = [0.5, 1, 2]
     sample_rates = [0.001]
     lrs = [0.1]
     clips = [1]
@@ -77,6 +78,14 @@ if 'eval' in MODE:
     for nr, ep, sig, sr, lr, c, sts in itertools.product(n_runss, epochss, sigmas, sample_rates, lrs, clips, sub_training_sizes): 
         print(EVAL_COMMAND.format(dataset=DATASET, n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, sub_training_size=sts, train_mode=TRAIN_MODE))
         proc = Popen(EVAL_COMMAND.format(dataset=DATASET, n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, sub_training_size=sts, train_mode=TRAIN_MODE),
+                        shell=True,
+                        cwd='./')
+        proc.wait()
+
+if 'sub-acc-test' in MODE:
+    for nr, ep, sig, sr, lr, c, sts in itertools.product(n_runss, epochss, sigmas, sample_rates, lrs, clips, sub_training_sizes): 
+        print(TRAIN_SUBSET_ACC.format(dataset=DATASET, n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, sub_training_size=sts, train_mode=TRAIN_MODE))
+        proc = Popen(TRAIN_SUBSET_ACC.format(dataset=DATASET, n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, sub_training_size=sts, train_mode=TRAIN_MODE),
                         shell=True,
                         cwd='./')
         proc.wait()
