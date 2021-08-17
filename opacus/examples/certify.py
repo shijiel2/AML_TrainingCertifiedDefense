@@ -547,11 +547,11 @@ if __name__ == "__main__":
         # # Optional "sub-training-size V.S. acc" plot
         # acc_lists = []
         # subset_lists = []
-        # for epoch in [20, 50, 100]:
-        #     subset_acc = np.load(f"{result_folder}/subset_acc_list_{epoch}.npy")
+        # for sigma in [0.5, 1.0, 2.0]:
+        #     subset_acc = np.load(f"{result_folder}/subset_acc_list_{sigma}.npy")
         #     subset_list = [x[0] for x in subset_acc]
         #     acc_list = [x[1] for x in subset_acc]
         #     acc_lists.append(acc_list)
         #     subset_lists.append(subset_list)
-        # plot_certified_acc(acc_lists, subset_lists, ['Epochs-20', 'Epochs-50', 'Epochs-100'], f"{result_folder}/subset_vs_acc.png", xlabel='Size of sub-training set', ylabel='Clean Accuracy')
+        # plot_certified_acc(acc_lists, subset_lists, ['Sigma-0.5', 'Sigma-1.0', 'Sigma-2.0'], f"{result_folder}/subset_vs_acc.png", xlabel='Size of sub-training set', ylabel='Clean Accuracy')
 
