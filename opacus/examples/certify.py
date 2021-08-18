@@ -153,7 +153,7 @@ def dp_amplify(epsilon, delta, m, n):
 
     return epsilon_new, delta_new
 
-def rdp_amplify(alpha, m, n, sample_rate, sigma, steps):
+def rdp_amplify(alpha, m, n, sample_rate, sigma):
     
     prob = m / n
 
@@ -162,7 +162,7 @@ def rdp_amplify(alpha, m, n, sample_rate, sigma, steps):
     from autodp import utils
 
     def func(alpha):
-        rdp = PrivacyEngine._get_renyi_divergence(sample_rate=sample_rate, noise_multiplier=sigma, alphas=[alpha]) * steps
+        rdp = PrivacyEngine._get_renyi_divergence(sample_rate=sample_rate, noise_multiplier=sigma, alphas=[alpha])
         eps = rdp.cpu().detach().numpy()[0]
         return eps
 
@@ -246,7 +246,8 @@ def check_condition_rdp(radius, sample_rate, steps, alpha, delta, sigma, p1, p2)
             sample_rate=sample_rate, noise_multiplier=sigma, alphas=[alpha]) * steps
         eps = rdp.cpu().detach().numpy()[0]
     elif args.train_mode == 'Sub-DP':
-        _, eps = rdp_amplify(alpha, args.sub_training_size, args.training_size, sample_rate, sigma, steps)
+        _, eps = rdp_amplify(alpha, args.sub_training_size, args.training_size, sample_rate, sigma)
+        eps *= steps
 
     import numpy as np
     val = np.e**(-eps) * p1**(alpha/(alpha-1)) - (np.e**eps * p2)**((alpha-1)/alpha)
@@ -401,7 +402,7 @@ def plot_certified_acc(c_acc_lists, c_rad_lists, name_list, plot_path, xlabel='N
         plt.plot(c_rad_list, c_acc_list, label=name)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
-    plt.legend(loc="upper left")
+    plt.legend(loc="upper right")
     plt.grid(True)
     plt.savefig(plot_path, bbox_inches='tight')
     plt.clf()
@@ -528,8 +529,8 @@ if __name__ == "__main__":
     
             acc1, rad1 = certified_acc_against_radius(cpsa_rdp, radius_range=args.radius_range)
             acc2, rad2 = certified_acc_against_radius(cpsa_dp, radius_range=args.radius_range)
-            acc3, rad3 = certified_acc_against_radius_dp_baseline(clean_acc_list, dp_epsilon, radius_range=args.radius_range)
-            plot_certified_acc([acc1, acc2, acc3], [rad1, rad2, rad3], ['RDP', 'DP', 'Baseline-DP'], f"{result_folder}/compare_certified_acc_plot.png")
+            # acc3, rad3 = certified_acc_against_radius_dp_baseline(clean_acc_list, dp_epsilon, radius_range=args.radius_range)
+            plot_certified_acc([acc1, acc2], [rad1, rad2], ['RDP', 'DP'], f"{result_folder}/compare_certified_acc_plot.png")
             
         elif args.train_mode == 'Bagging':
             cpsa_bagging = np.load(f"{result_folder}/bagging_cpsa.npy")
