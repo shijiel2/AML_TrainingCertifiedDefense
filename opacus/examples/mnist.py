@@ -263,21 +263,29 @@ def main():
         )
 
         # Generate sub-training dataset if necessary
-        if or_sub_training_size is not None:
-            train_dataset = gen_sub_dataset(train_dataset, or_sub_training_size, False)
-        else:
-            if args.train_mode == 'Bagging':
-                train_dataset = gen_sub_dataset(train_dataset, args.sub_training_size, True)
-            elif args.train_mode == 'Sub-DP':
-                train_dataset = gen_sub_dataset(train_dataset, args.sub_training_size, False)
+        sub_training_size = args.sub_training_size if or_sub_training_size is None else or_sub_training_size
+        if args.train_mode == 'Bagging':
+            train_dataset = gen_sub_dataset(train_dataset, sub_training_size, True)
 
-        if args.train_mode in ['DP', 'Sub-DP']:
+        if args.train_mode == 'DP':
             train_loader = torch.utils.data.DataLoader(
                 train_dataset,
                 generator=None,
                 batch_sampler=UniformWithReplacementSampler(
                     num_samples=len(train_dataset),
                     sample_rate=args.sample_rate,
+                    generator=None,
+                ),
+                **kwargs,
+            )
+        elif args.train_mode == 'Sub-DP':
+            train_loader = torch.utils.data.DataLoader(
+                train_dataset,
+                generator=None,
+                batch_sampler=FixedSizedUniformWithReplacementSampler(
+                    num_samples=len(train_dataset),
+                    sample_rate=args.sample_rate,
+                    train_size=sub_training_size,
                     generator=None,
                 ),
                 **kwargs,
