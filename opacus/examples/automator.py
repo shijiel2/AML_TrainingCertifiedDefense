@@ -10,9 +10,9 @@ from subprocess import Popen
 from notification import NOTIFIER
 
 
-MODE = ['train', 'certify', 'nplot', 'neval', 'nsub-acc-test']
+MODE = ['train', 'certify', 'plot', 'neval', 'nsub-acc-test']
 DATASET = 'mnist'
-TRAIN_MODE = 'Sub-DP' # DP, Sub-DP, Bagging
+TRAIN_MODE = 'Sub-DP-no-RDP-amp' # DP, Sub-DP, Bagging, Sub-DP-no-RDP-amp
 
 
 TRAIN_COMMAND = 'python {dataset}.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr} -c {c} --sub-training-size {sub_training_size} --save-model --train-mode {train_mode}'
@@ -32,7 +32,7 @@ if DATASET == 'mnist':
     n_runss = [1000]
     epochss = [1]
     sigmas = [2]
-    sample_rates = [0.002]
+    sample_rates = [0.001]
     lrs = [0.1]
     clips = [1]
     sub_training_sizes = [30000]

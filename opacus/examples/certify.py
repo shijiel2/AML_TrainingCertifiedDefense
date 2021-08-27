@@ -241,7 +241,7 @@ def check_condition_rdp(radius, sample_rate, steps, alpha, delta, sigma, p1, p2)
     
     sample_rate = 1 - (1 - sample_rate)**radius
 
-    if args.train_mode == 'DP':
+    if args.train_mode == 'DP' or args.train_mode == 'Sub-DP-no-RDP-amp':
         rdp = PrivacyEngine._get_renyi_divergence(
             sample_rate=sample_rate, noise_multiplier=sigma, alphas=[alpha]) * steps
         eps = rdp.cpu().detach().numpy()[0]
@@ -479,6 +479,11 @@ if __name__ == "__main__":
             f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
             f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.sub_training_size}_{args.n_runs}"
         )
+    elif args.train_mode == 'Sub-DP-no-RDP-amp':
+        result_folder = (
+            f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
+            f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.sub_training_size}_{args.n_runs}_no_RDP_amp"
+        )
     else:
         exit('Invalid Method name.')
     print(result_folder)
@@ -493,7 +498,7 @@ if __name__ == "__main__":
     num_class = aggregate_result.shape[1] - 1
     num_data = aggregate_result.shape[0]
 
-    if args.train_mode in ['DP', 'Sub-DP']:
+    if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-RDP-amp']:
         dp_epsilon = np.load(f"{result_folder}/dp_epsilon.npy")
         rdp_alphas = np.load(f"{result_folder}/rdp_alphas.npy")
         rdp_epsilons = np.load(f"{result_folder}/rdp_epsilons.npy")
@@ -511,7 +516,7 @@ if __name__ == "__main__":
 
     # Certify
     if not args.plot:
-        if args.train_mode in ['DP', 'Sub-DP']:
+        if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-RDP-amp']:
             np.save(f"{result_folder}/dp_cpsa.npy", certify('dp'))
             np.save(f"{result_folder}/rdp_cpsa.npy", certify('rdp'))
             # np.save(f"{result_folder}/best_dp_cpsa.npy", certify('best'))        
@@ -520,7 +525,7 @@ if __name__ == "__main__":
 
     # Plot
     else:
-        if args.train_mode in ['DP', 'Sub-DP']:
+        if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-RDP-amp']:
             cpsa_dp = np.load(f"{result_folder}/dp_cpsa.npy")
             cpsa_rdp = np.load(f"{result_folder}/rdp_cpsa.npy")
             # cpsa_best_dp = np.load(f"{result_folder}/best_dp_cpsa.npy")
