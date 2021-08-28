@@ -35,7 +35,7 @@ if DATASET == 'mnist':
     sample_rates = [0.001]
     lrs = [0.1]
     clips = [1]
-    sub_training_sizes = [30000]
+    sub_training_sizes = [20000]
 
 elif DATASET == 'cifar10':
     results_folder = '../results/cifar10'

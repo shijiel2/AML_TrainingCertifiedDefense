@@ -256,6 +256,28 @@ def check_condition_rdp(radius, sample_rate, steps, alpha, delta, sigma, p1, p2)
     else:
         return False
 
+
+def check_condition_rdp_gp(radius, sample_rate, steps, alpha, delta, sigma, p1, p2):
+
+    if args.train_mode == 'DP' or args.train_mode == 'Sub-DP-no-RDP-amp':
+        rdp = PrivacyEngine._get_renyi_divergence(
+            sample_rate=sample_rate, noise_multiplier=sigma, alphas=[alpha]) * steps
+        eps = rdp.cpu().detach().numpy()[0]
+    elif args.train_mode == 'Sub-DP':
+        _, eps = rdp_amplify(alpha, args.sub_training_size, args.training_size, sample_rate, sigma)
+        eps *= steps
+
+    alpha = alpha / radius
+    eps = 3**(np.log2(radius)) * eps
+
+    import numpy as np
+    val = np.e**(-eps) * p1**(alpha/(alpha-1)) - (np.e**eps * p2)**((alpha-1)/alpha)
+    if val >= 0:
+        return True
+    else:
+        return False
+
+
 def check_condition_bagging(radius_value, k_value, n_value, p_l_value,p_s_value):
 
     threshold_point = radius_value / (1.0 - np.power(0.5, 1.0/(k_value-1.0)))
@@ -324,6 +346,44 @@ def CertifyRadiusRDP(ls, probability_bar, steps, sample_rate, sigma):
                     high = radius - 1
             radius = math.floor(low)
             if check_condition_rdp(radius=radius, sample_rate=sample_rate, steps=steps, alpha=alpha, delta=delta, sigma=sigma, p1=p1, p2=p2):
+                valid_radius.add((radius, alpha, delta))
+            elif radius == 0:
+                valid_radius.add((radius, alpha, delta))
+            else:
+                print("error", (radius, alpha, delta))
+                raise ValueError
+
+    if len(valid_radius) > 0:
+        max_radius = max(valid_radius, key=lambda x: x[0])[0]
+        # for x in valid_radius:
+        #     if x[0] == max_radius:
+        #         print(x)
+        return max_radius
+    else:
+        return 0
+
+
+def CertifyRadiusRDP_GP(ls, probability_bar, steps, sample_rate, sigma):
+    p1 = probability_bar[ls]
+    probability_bar[ls] = -1
+    p2 = np.amax(probability_bar)
+    if p1 <= p2:
+        return -1
+
+    valid_radius = set()
+    for alpha in [1 + x for x in range(1, 100)]:
+        # for delta in [x / 100.0 for x in range(1, 10)]:
+        for delta in [0]:
+            # binary search for radius
+            low, high = 0, 1000
+            while low <= high:
+                radius = math.ceil((low + high) / 2.0)
+                if check_condition_rdp_gp(radius=radius, sample_rate=sample_rate, steps=steps, alpha=alpha, delta=delta, sigma=sigma, p1=p1, p2=p2):
+                    low = radius + 0.1
+                else:
+                    high = radius - 1
+            radius = math.floor(low)
+            if check_condition_rdp_gp(radius=radius, sample_rate=sample_rate, steps=steps, alpha=alpha, delta=delta, sigma=sigma, p1=p1, p2=p2):
                 valid_radius.add((radius, alpha, delta))
             elif radius == 0:
                 valid_radius.add((radius, alpha, delta))
@@ -437,6 +497,9 @@ def certify(method_name):
         elif method_name == 'rdp':
             rd = CertifyRadiusRDP(ls, probability_bar,
                                   rdp_steps, args.sample_rate, args.sigma)
+        elif method_name == 'rdp_gp':
+            rd = CertifyRadiusRDP_GP(ls, probability_bar,
+                                  rdp_steps, args.sample_rate, args.sigma)
         elif method_name == 'best':
             rd1 = CertifyRadiusDP(ls, probability_bar, dp_epsilon, 1e-5)
             rd2 = CertifyRadiusRDP(
@@ -519,7 +582,8 @@ if __name__ == "__main__":
         if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-RDP-amp']:
             np.save(f"{result_folder}/dp_cpsa.npy", certify('dp'))
             np.save(f"{result_folder}/rdp_cpsa.npy", certify('rdp'))
-            # np.save(f"{result_folder}/best_dp_cpsa.npy", certify('best'))        
+            # np.save(f"{result_folder}/best_dp_cpsa.npy", certify('best'))      
+            np.save(f"{result_folder}/rdp_gp_cpsa.npy", certify('rdp_gp'))  
         elif args.train_mode == 'Bagging':
             np.save(f"{result_folder}/bagging_cpsa.npy", certify('bagging'))
 
