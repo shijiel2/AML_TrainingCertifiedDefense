@@ -278,7 +278,7 @@ def main():
                 ),
                 **kwargs,
             )
-        elif args.train_mode == 'Sub-DP-no-RDP-amp':
+        elif args.train_mode == 'Sub-DP-no-amp':
             train_loader = torch.utils.data.DataLoader(
                 train_dataset,
                 generator=None,
@@ -338,7 +338,7 @@ def main():
             f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
             f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.sub_training_size}_{args.n_runs}"
         )
-    elif args.train_mode == 'Sub-DP-no-RDP-amp':
+    elif args.train_mode == 'Sub-DP-no-amp':
         result_folder = (
             f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
             f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.sub_training_size}_{args.n_runs}_no_RDP_amp"
@@ -369,7 +369,7 @@ def main():
             logging.warn(f"Model name {args.model_name} invaild.")
             exit()
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0)
-        if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-RDP-amp']:
+        if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
             privacy_engine = PrivacyEngine(
                 model,
                 sample_rate=args.sample_rate,
@@ -398,7 +398,7 @@ def main():
                     test(args, model, device, test_loader)
                 if run_idx == 0:
                     acc = test(args, model, device, test_loader)
-                    if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-RDP-amp']:
+                    if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
                         eps, _ = optimizer.privacy_engine.get_privacy_spent(args.delta)
                         epoch_acc_epsilon.append((acc, eps))    
             if run_idx == 0:
@@ -409,7 +409,7 @@ def main():
             sub_acc_list.append((sub_training_size, test(args, model, device, test_loader)))
 
         # post-training stuff
-        if run_idx == 0 and args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-RDP-amp']:
+        if run_idx == 0 and args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
             rdp_alphas, rdp_epsilons = optimizer.privacy_engine.get_rdp_privacy_spent()
             dp_epsilon, best_alpha = optimizer.privacy_engine.get_privacy_spent(
                 args.delta)
