@@ -216,6 +216,9 @@ def rdp_amplify(alpha, m, n, sample_rate, sigma):
 
 
 def check_condition_dp(radius_value, epsilon, delta, p_l_value, p_s_value):
+    if radius_value == 0:
+        return True
+
     r, e, d, pl, ps = np.float(radius_value), np.float(epsilon), np.float(
         delta), np.float(p_l_value), np.float(p_s_value)
     
@@ -238,6 +241,9 @@ def check_condition_dp(radius_value, epsilon, delta, p_l_value, p_s_value):
 
 
 def check_condition_rdp(radius, sample_rate, steps, alpha, delta, sigma, p1, p2):
+
+    if radius == 0:
+        return True
     
     sample_rate = 1 - (1 - sample_rate)**radius
 
@@ -258,6 +264,9 @@ def check_condition_rdp(radius, sample_rate, steps, alpha, delta, sigma, p1, p2)
 
 def check_condition_rdp_gp(radius, sample_rate, steps, alpha, delta, sigma, p1, p2):
 
+    if radius == 0:
+        return True
+
     if args.train_mode == 'DP' or args.train_mode == 'Sub-DP-no-amp':
         rdp = PrivacyEngine._get_renyi_divergence(
             sample_rate=sample_rate, noise_multiplier=sigma, alphas=[alpha]) * steps
@@ -268,6 +277,9 @@ def check_condition_rdp_gp(radius, sample_rate, steps, alpha, delta, sigma, p1, 
 
     alpha = alpha / radius
     eps = 3**(np.log2(radius)) * eps
+
+    if alpha <= 1:
+        return False
 
     val = np.e**(-eps) * p1**(alpha/(alpha-1)) - (np.e**eps * p2)**((alpha-1)/alpha)
     if val >= 0:
@@ -592,12 +604,14 @@ if __name__ == "__main__":
             cpsa_rdp = np.load(f"{result_folder}/rdp_cpsa.npy")
             # cpsa_best_dp = np.load(f"{result_folder}/best_dp_cpsa.npy")
             # cpsa_bagging = np.load(f"{result_folder}/bagging_cpsa.npy")
+            cpsa_rdp_gp = np.load(f"{result_folder}/rdp_gp_cpsa.npy")
             clean_acc_list = np.load(f"{result_folder}/acc_list.npy")
     
             acc1, rad1 = certified_acc_against_radius(cpsa_rdp, radius_range=args.radius_range)
             acc2, rad2 = certified_acc_against_radius(cpsa_dp, radius_range=args.radius_range)
             acc3, rad3 = certified_acc_against_radius_dp_baseline(clean_acc_list, dp_epsilon, radius_range=args.radius_range)
-            plot_certified_acc([acc1, acc2], [rad1, rad2], ['RDP', 'DP'], f"{result_folder}/compare_certified_acc_plot.png")
+            acc4, rad4 = certified_acc_against_radius(cpsa_rdp_gp, radius_range=args.radius_range)
+            plot_certified_acc([acc1, acc2, acc3, acc4], [rad1, rad2, rad3, rad4], ['RDP', 'DP', 'Baseline-DP', 'Baseline-RDP-GP'], f"{result_folder}/compare_certified_acc_plot.png")
 
             # sub_range = [60000, 30000, 20000]
             # cpsa_dp_list = []
