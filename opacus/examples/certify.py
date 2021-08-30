@@ -249,7 +249,6 @@ def check_condition_rdp(radius, sample_rate, steps, alpha, delta, sigma, p1, p2)
         _, eps = rdp_amplify(alpha, args.sub_training_size, args.training_size, sample_rate, sigma)
         eps *= steps
 
-    import numpy as np
     val = np.e**(-eps) * p1**(alpha/(alpha-1)) - (np.e**eps * p2)**((alpha-1)/alpha)
     if val >= 0:
         return True
@@ -270,7 +269,6 @@ def check_condition_rdp_gp(radius, sample_rate, steps, alpha, delta, sigma, p1, 
     alpha = alpha / radius
     eps = 3**(np.log2(radius)) * eps
 
-    import numpy as np
     val = np.e**(-eps) * p1**(alpha/(alpha-1)) - (np.e**eps * p2)**((alpha-1)/alpha)
     if val >= 0:
         return True
@@ -580,8 +578,8 @@ if __name__ == "__main__":
     # Certify
     if not args.plot:
         if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
-            np.save(f"{result_folder}/dp_cpsa.npy", certify('dp'))
-            np.save(f"{result_folder}/rdp_cpsa.npy", certify('rdp'))
+            # np.save(f"{result_folder}/dp_cpsa.npy", certify('dp'))
+            # np.save(f"{result_folder}/rdp_cpsa.npy", certify('rdp'))
             # np.save(f"{result_folder}/best_dp_cpsa.npy", certify('best'))      
             np.save(f"{result_folder}/rdp_gp_cpsa.npy", certify('rdp_gp'))  
         elif args.train_mode == 'Bagging':
@@ -598,7 +596,7 @@ if __name__ == "__main__":
     
             acc1, rad1 = certified_acc_against_radius(cpsa_rdp, radius_range=args.radius_range)
             acc2, rad2 = certified_acc_against_radius(cpsa_dp, radius_range=args.radius_range)
-            # acc3, rad3 = certified_acc_against_radius_dp_baseline(clean_acc_list, dp_epsilon, radius_range=args.radius_range)
+            acc3, rad3 = certified_acc_against_radius_dp_baseline(clean_acc_list, dp_epsilon, radius_range=args.radius_range)
             plot_certified_acc([acc1, acc2], [rad1, rad2], ['RDP', 'DP'], f"{result_folder}/compare_certified_acc_plot.png")
 
             # sub_range = [60000, 30000, 20000]
