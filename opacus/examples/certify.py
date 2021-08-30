@@ -590,8 +590,8 @@ if __name__ == "__main__":
     # Certify
     if not args.plot:
         if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
-            # np.save(f"{result_folder}/dp_cpsa.npy", certify('dp'))
-            # np.save(f"{result_folder}/rdp_cpsa.npy", certify('rdp'))
+            np.save(f"{result_folder}/dp_cpsa.npy", certify('dp'))
+            np.save(f"{result_folder}/rdp_cpsa.npy", certify('rdp'))
             # np.save(f"{result_folder}/best_dp_cpsa.npy", certify('best'))      
             np.save(f"{result_folder}/rdp_gp_cpsa.npy", certify('rdp_gp'))  
         elif args.train_mode == 'Bagging':
@@ -609,9 +609,9 @@ if __name__ == "__main__":
     
             acc1, rad1 = certified_acc_against_radius(cpsa_rdp, radius_range=args.radius_range)
             acc2, rad2 = certified_acc_against_radius(cpsa_dp, radius_range=args.radius_range)
-            acc3, rad3 = certified_acc_against_radius_dp_baseline(clean_acc_list, dp_epsilon, radius_range=args.radius_range)
+            # acc3, rad3 = certified_acc_against_radius_dp_baseline(clean_acc_list, dp_epsilon, radius_range=args.radius_range)
             acc4, rad4 = certified_acc_against_radius(cpsa_rdp_gp, radius_range=args.radius_range)
-            plot_certified_acc([acc1, acc2, acc3, acc4], [rad1, rad2, rad3, rad4], ['RDP', 'DP', 'Baseline-DP', 'Baseline-RDP-GP'], f"{result_folder}/compare_certified_acc_plot.png")
+            plot_certified_acc([acc1, acc2, acc4], [rad1, rad2, rad4], ['RDP', 'DP', 'Baseline-RDP-GP'], f"{result_folder}/compare_certified_acc_plot.png")
 
             # sub_range = [60000, 30000, 20000]
             # cpsa_dp_list = []
