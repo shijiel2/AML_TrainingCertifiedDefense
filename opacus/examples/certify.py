@@ -259,7 +259,7 @@ def check_condition_rdp(radius, sample_rate, steps, alpha, delta, sigma, p1, p2)
 
 def check_condition_rdp_gp(radius, sample_rate, steps, alpha, delta, sigma, p1, p2):
 
-    if args.train_mode == 'DP' or args.train_mode == 'Sub-DP-no-RDP-amp':
+    if args.train_mode == 'DP' or args.train_mode == 'Sub-DP-no-amp':
         rdp = PrivacyEngine._get_renyi_divergence(
             sample_rate=sample_rate, noise_multiplier=sigma, alphas=[alpha]) * steps
         eps = rdp.cpu().detach().numpy()[0]
@@ -545,7 +545,7 @@ if __name__ == "__main__":
     elif args.train_mode == 'Sub-DP-no-amp':
         result_folder = (
             f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
-            f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.sub_training_size}_{args.n_runs}_no_RDP_amp"
+            f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.sub_training_size}_{args.n_runs}_no_amp"
         )
     else:
         exit('Invalid Method name.')
@@ -600,6 +600,21 @@ if __name__ == "__main__":
             acc2, rad2 = certified_acc_against_radius(cpsa_dp, radius_range=args.radius_range)
             # acc3, rad3 = certified_acc_against_radius_dp_baseline(clean_acc_list, dp_epsilon, radius_range=args.radius_range)
             plot_certified_acc([acc1, acc2], [rad1, rad2], ['RDP', 'DP'], f"{result_folder}/compare_certified_acc_plot.png")
+
+            # sub_range = [60000, 30000, 20000]
+            # cpsa_dp_list = []
+            # cpsa_rdp_list = []
+            # for sub in sub_range:
+            #     cpsa_dp_list.append(np.load(f"{result_folder}/dp_cpsa_{sub}.npy"))
+            #     cpsa_rdp_list.append(np.load(f"{result_folder}/rdp_cpsa_{sub}.npy"))
+            
+            # acc_rad_dp = [certified_acc_against_radius(cpsa_dp, radius_range=args.radius_range) for cpsa_dp in cpsa_dp_list]
+            # acc_rad_rdp = [certified_acc_against_radius(cpsa_rdp, radius_range=args.radius_range) for cpsa_rdp in cpsa_rdp_list]
+
+            # plot_certified_acc([x[0] for x in acc_rad_dp], [x[1] for x in acc_rad_dp], [f'Sub-training size {sub}' for sub in sub_range], f"{result_folder}/compare_certified_acc_plot_sub_dp.png")
+            # plot_certified_acc([x[0] for x in acc_rad_rdp], [x[1] for x in acc_rad_rdp], [f'Sub-training size {sub}' for sub in sub_range], f"{result_folder}/compare_certified_acc_plot_sub_rdp.png")
+            
+
             
         elif args.train_mode == 'Bagging':
             cpsa_bagging = np.load(f"{result_folder}/bagging_cpsa.npy")
