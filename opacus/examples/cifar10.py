@@ -384,6 +384,12 @@ def main():
         default="DP",
         help="Train mode: DP, Sub-DP, Bagging",
     )
+    parser.add_argument(
+        "--sub-acc-test",
+        action="store_true",
+        default=False,
+        help="Test subset V.S. acc (default: false)",
+    )
 
     args = parser.parse_args()
 
