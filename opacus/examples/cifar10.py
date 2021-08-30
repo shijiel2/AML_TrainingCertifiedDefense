@@ -23,7 +23,7 @@ import torchvision.transforms as transforms
 from opacus import PrivacyEngine
 from opacus.layers import DifferentiallyPrivateDistributedDataParallel as DPDDP
 from opacus.utils import stats
-from opacus.utils.uniform_sampler import UniformWithReplacementSampler
+from opacus.utils.uniform_sampler import UniformWithReplacementSampler, FixedSizedUniformWithReplacementSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torchvision.datasets import CIFAR10
 from tqdm import tqdm
@@ -403,6 +403,11 @@ def main():
             f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
             f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.sub_training_size}_{args.n_runs}"
         )
+    elif args.train_mode == 'Sub-DP-no-amp':
+        result_folder = (
+            f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
+            f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.sub_training_size}_{args.n_runs}_no_amp"
+        )
     print(f'Result folder: {result_folder}')
     models_folder = f"{result_folder}/models"
     Path(models_folder).mkdir(parents=True, exist_ok=True)
@@ -466,21 +471,24 @@ def main():
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     ]
 
-    def gen_train_dataset_loader():
+    def gen_sub_dataset(dataset, sub_training_size, with_replacement):
+        indexs = np.random.choice(len(dataset), sub_training_size, replace=with_replacement)
+        dataset = torch.utils.data.Subset(dataset, indexs)
+        print(f"Sub-dataset size {len(dataset)}")
+        return dataset
+
+    def gen_train_dataset_loader(or_sub_training_size=None):
         train_transform = transforms.Compose(augmentations + normalize if args.train_mode == 'Bagging' else normalize)
         train_dataset = CIFAR10(
             root=args.data_root, train=True, download=True, transform=train_transform
         )
-        if args.train_mode == 'Bagging':
-            indexs = np.random.choice(len(train_dataset), args.sub_training_size, replace=True)
-            train_dataset = torch.utils.data.Subset(train_dataset, indexs)
-            print(f"Sub-training dataset size {len(train_dataset)}")
-        elif args.train_mode == 'Sub-DP':
-            indexs = np.random.choice(len(train_dataset), args.sub_training_size, replace=False)
-            train_dataset = torch.utils.data.Subset(train_dataset, indexs)
-            print(f"Sub-training dataset size {len(train_dataset)}")
+
+        sub_training_size = args.sub_training_size if or_sub_training_size is None else or_sub_training_size
+
+        if args.train_mode == 'Bagging' or args.train_mode == 'Sub-DP':
+            train_dataset = gen_sub_dataset(train_dataset, sub_training_size, True)
         
-        if args.train_mode in ['DP', 'Sub-DP']:
+        if args.train_mode == 'DP' or args.train_mode == 'Sub-DP':
             train_loader = torch.utils.data.DataLoader(
                 train_dataset,
                 num_workers=args.workers,
@@ -488,6 +496,18 @@ def main():
                 batch_sampler=UniformWithReplacementSampler(
                     num_samples=len(train_dataset),
                     sample_rate=args.sample_rate,
+                    generator=generator,
+                ),
+            )
+        elif args.train_mode == 'Sub-DP-no-amp':
+            train_loader = torch.utils.data.DataLoader(
+                train_dataset,
+                num_workers=args.workers,
+                generator=generator,
+                batch_sampler=FixedSizedUniformWithReplacementSampler(
+                    num_samples=len(train_dataset),
+                    sample_rate=args.sample_rate,
+                    train_size=sub_training_size,
                     generator=generator,
                 ),
             )
@@ -526,6 +546,10 @@ def main():
     test_dataset, test_loader = gen_test_dataset_loader()
     aggregate_result = np.zeros([len(test_dataset), 10 + 1], dtype=np.int)
     acc_list = []
+
+    # use this code for "sub_training_size V.S. acc"
+    if args.sub_acc_test:
+        sub_acc_list = []
     
     for run_idx in range(args.n_runs):
         # Pre-training stuff for each base classifier
@@ -558,7 +582,7 @@ def main():
             raise NotImplementedError("Optimizer not recognized. Please check spelling")
 
         # Define the DP engine
-        if args.train_mode in ['DP', 'Sub-DP']:
+        if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
             privacy_engine = PrivacyEngine(
                 model,
                 sample_rate=args.sample_rate * args.n_accumulation_steps,
@@ -574,7 +598,13 @@ def main():
         if args.load_model:
             model.load_state_dict(torch.load(f"{models_folder}/model_{run_idx}.pt"))
         else:
-            _, train_loader = gen_train_dataset_loader()
+            # use this code for "sub_training_size V.S. acc"
+            if args.sub_acc_test:
+                sub_training_size = int(50000 - 50000 / args.n_runs * run_idx)
+                _, train_loader = gen_train_dataset_loader(sub_training_size)
+            else:    
+                _, train_loader = gen_train_dataset_loader()
+
             epoch_acc_epsilon = []
             for epoch in range(args.start_epoch, args.epochs + 1):
                 if args.lr_schedule == "cos":
@@ -596,6 +626,10 @@ def main():
                 np.save(f"{result_folder}/epoch_acc_eps", epoch_acc_epsilon)
             
         # Post-training stuff 
+
+        # use this code for "sub_training_size V.S. acc"
+        if args.sub_acc_test:
+            sub_acc_list.append((sub_training_size, test(args, model, test_loader, device)))
 
         # save the DP related data
         if run_idx == 0 and args.train_mode in ['DP', 'Sub-DP']:
@@ -619,6 +653,10 @@ def main():
     aggregate_result[np.arange(0, len(test_dataset)), -1] = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))[1]
     np.save(f"{result_folder}/aggregate_result", aggregate_result)
     np.save(f"{result_folder}/acc_list", acc_list)
+
+    # use this code for "sub_training_size V.S. acc"
+    if args.sub_acc_test:
+        np.save(f"{result_folder}/subset_acc_list", sub_acc_list)
 
     if args.local_rank != -1:
         cleanup()

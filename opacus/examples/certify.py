@@ -609,7 +609,7 @@ if __name__ == "__main__":
     
             acc1, rad1 = certified_acc_against_radius(cpsa_rdp, radius_range=args.radius_range)
             acc2, rad2 = certified_acc_against_radius(cpsa_dp, radius_range=args.radius_range)
-            acc3, rad3 = certified_acc_against_radius_dp_baseline(clean_acc_list, dp_epsilon, radius_range=args.radius_range)
+            # acc3, rad3 = certified_acc_against_radius_dp_baseline(clean_acc_list, dp_epsilon, radius_range=args.radius_range)
             acc4, rad4 = certified_acc_against_radius(cpsa_rdp_gp, radius_range=args.radius_range)
             plot_certified_acc([acc1, acc2, acc3, acc4], [rad1, rad2, rad3, rad4], ['RDP', 'DP', 'Baseline-DP', 'RDP-GP'], f"{result_folder}/compare_certified_acc_plot.png")
 

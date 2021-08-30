@@ -341,7 +341,7 @@ def main():
     elif args.train_mode == 'Sub-DP-no-amp':
         result_folder = (
             f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
-            f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.sub_training_size}_{args.n_runs}_no_RDP_amp"
+            f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.sub_training_size}_{args.n_runs}_no_amp"
         )
     print(f'Result folder: {result_folder}')
     models_folder = f"{result_folder}/models"
@@ -357,7 +357,7 @@ def main():
     aggregate_result = np.zeros([len(test_dataset), 10 + 1], dtype=np.int)
     acc_list = []
     
-    # # use this code for "sub_training_size V.S. acc"
+    # use this code for "sub_training_size V.S. acc"
     if args.sub_acc_test:
         sub_acc_list = []
 
@@ -391,6 +391,7 @@ def main():
                 _, train_loader = gen_train_dataset_loader(sub_training_size)
             else:
                 _, train_loader = gen_train_dataset_loader()
+
             epoch_acc_epsilon = []
             for epoch in range(1, args.epochs + 1):
                 train(args, model, device, train_loader, optimizer, epoch)
