@@ -626,7 +626,7 @@ def main():
                 if run_idx == 0:
                     logging.info(f'Epoch: {epoch}')
                     acc = test(args, model, test_loader, device)
-                    if args.train_mode in ['DP', 'Sub-DP']:
+                    if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
                         eps, _ = optimizer.privacy_engine.get_privacy_spent(args.delta)
                         epoch_acc_epsilon.append((acc, eps))
             if run_idx == 0:
@@ -639,7 +639,7 @@ def main():
             sub_acc_list.append((sub_training_size, test(args, model, test_loader, device)))
 
         # save the DP related data
-        if run_idx == 0 and args.train_mode in ['DP', 'Sub-DP']:
+        if run_idx == 0 and args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
             rdp_alphas, rdp_epsilons = optimizer.privacy_engine.get_rdp_privacy_spent()
             dp_epsilon, best_alpha = optimizer.privacy_engine.get_privacy_spent(args.delta)
             rdp_steps = optimizer.privacy_engine.steps
