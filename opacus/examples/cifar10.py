@@ -624,6 +624,7 @@ def main():
                     test(args, model, test_loader, device)
 
                 if run_idx == 0:
+                    logging.info(f'Epoch: {epoch}')
                     acc = test(args, model, test_loader, device)
                     if args.train_mode in ['DP', 'Sub-DP']:
                         eps, _ = optimizer.privacy_engine.get_privacy_spent(args.delta)

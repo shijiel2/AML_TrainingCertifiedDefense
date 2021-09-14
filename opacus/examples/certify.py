@@ -287,7 +287,7 @@ if __name__ == "__main__":
     else:
         if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
 
-            method_name = ['RDP', 'DP', 'Baseline-DP', 'Baseline-RDP-GP', 'Baseline-DP-size-one']
+            method_name = ['DP-Bagging', 'RDP', 'DP', 'Baseline-DP', 'Baseline-RDP-GP']
             acc_list = []
             rad_list = []
             for name in method_name:
@@ -305,6 +305,8 @@ if __name__ == "__main__":
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/bagging_cpsa.npy"), radius_range=args.radius_range)
                 elif name == 'Best-DP':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/best_dp_cpsa.npy"), radius_range=args.radius_range)
+                elif name == 'DP-Bagging':
+                    acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/dp_bagging_cpsa.npy"), radius_range=args.radius_range)
                 else:
                     print('Invalid method name in Plot.')
                 acc_list.append(acc)

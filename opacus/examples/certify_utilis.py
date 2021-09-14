@@ -413,7 +413,7 @@ def CertifyRadiusDPBS(args, ls, probability_bar, k, n, epsilon, delta, steps, sa
     # first using CertifyRadius_DP to find out the robustness we have in a sub-dataset
     # change train_mode to 'DP' to avoid dp amplification
     args.train_mode = 'DP'
-    dp_rad = max(CertifyRadiusRDP(args, ls, probability_bar, steps, sample_rate, sigma), CertifyRadiusDP(args, ls, probability_bar, epsilon, delta))
+    dp_rad = max(0, CertifyRadiusRDP(args, ls, np.array(probability_bar, copy=True), steps, sample_rate, sigma), CertifyRadiusDP(args, ls, np.array(probability_bar, copy=True), epsilon, delta))
     args.train_mode = 'Sub-DP'
 
     # DP bagging part
