@@ -6,12 +6,13 @@ from pandas.core.base import DataError
 from torch.utils.data import dataset
 sys.path.append("../..")
 from subprocess import Popen
+from certify_utilis import get_dir, extract_summary
 
 from notification import NOTIFIER
 
 
-MODE = ['train', 'ncertify', 'nplot', 'neval', 'nsub-acc-test']
-DATASET = 'mnist'
+MODE = ['train', 'ncertify', 'nplot', 'neval', 'nsub-acc-test', 'nsummary']
+DATASET = 'cifar10'
 TRAIN_MODE = 'Sub-DP' # DP, Sub-DP, Bagging, Sub-DP-no-amp
 
 
@@ -42,11 +43,11 @@ elif DATASET == 'cifar10':
     model_name = 'ConvNet'
     training_size = 50000
     n_runss = [1]
-    epochss = [100]
-    sigmas = [1]
-    sample_rates = [128/5000] 
-    lrs = [0.1]
-    clips = [1]
+    epochss = [90]
+    sigmas = [1.0]
+    sample_rates = [256/5000, 512/5000, 1024/5000] # 256
+    lrs = [0.01, 0.005, 0.001] # 0.01
+    clips = [20.0, 25.0, 30.0, 35.0] # 25
     sub_training_sizes = [5000]
     
 
@@ -90,9 +91,18 @@ if 'sub-acc-test' in MODE:
                         cwd='./')
         proc.wait()
 
-# proc = Popen(MNIST_CERTIFY_COMMAND.format(n_runs=1000, epochs=1, sigma=3.5, sample_rate=0.001, lr=0.1),
-#              shell=True,
-#              cwd='./')
-# proc.wait()
+if 'summary' in MODE:
+    summarys = []
+    for nr, ep, sig, sr, lr, c, sts in itertools.product(n_runss, epochss, sigmas, sample_rates, lrs, clips, sub_training_sizes):
+        dir_path = get_dir(TRAIN_MODE, results_folder, model_name, lr, sig, c, sr, ep, nr, sts)
+        trainlog_path = f'{dir_path}/train.log'
+        with open(trainlog_path, 'r') as f:
+            lines = f.readlines()
+            acc, eps = extract_summary(lines)
+            summarys.append((dir_path, acc, eps))
+    summarys.sort(key=lambda x:x[1])
+    with open(f'{results_folder}/summary.txt', 'w') as f:
+        f.write(str(summarys))    
+
 
 NOTIFIER.notify(socket.gethostname(), 'Job Done.')

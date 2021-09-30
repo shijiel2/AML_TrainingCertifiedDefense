@@ -1,5 +1,6 @@
 from __future__ import print_function
 from os import EX_OSFILE
+from pyvacy.pyvacy.analysis.epsilon_calculation import epsilon
 import numpy as np
 from numpy.core.numeric import binary_repr
 from statsmodels.stats.proportion import (
@@ -436,3 +437,43 @@ def CertifyRadiusDPBS(args, ls, probability_bar, k, n, epsilon, delta, steps, sa
     else:
         print("error")
         raise ValueError
+
+def get_dir(train_mode, results_folder, model_name, lr, sigma, max_per_sample_grad_norm, sample_rate, epochs, n_runs, sub_training_size):
+    if train_mode == 'DP':
+        result_folder = (
+            f"{results_folder}/{model_name}_{lr}_{sigma}_"
+            f"{max_per_sample_grad_norm}_{sample_rate}_{epochs}_{n_runs}"
+        )
+    elif train_mode == 'Bagging':
+        result_folder = (
+            f"{results_folder}/Bagging_{model_name}_{lr}_{sub_training_size}_"
+            f"{epochs}_{n_runs}"
+        )
+    elif train_mode == 'Sub-DP':
+        result_folder = (
+            f"{results_folder}/{model_name}_{lr}_{sigma}_"
+            f"{max_per_sample_grad_norm}_{sample_rate}_{epochs}_{sub_training_size}_{n_runs}"
+        )
+    elif train_mode == 'Sub-DP-no-amp':
+        result_folder = (
+            f"{results_folder}/{model_name}_{lr}_{sigma}_"
+            f"{max_per_sample_grad_norm}_{sample_rate}_{epochs}_{sub_training_size}_{n_runs}_no_amp"
+        )
+    else:
+        exit('Invalid Method name.')
+    print(result_folder)
+    return result_folder
+
+def extract_summary(lines):
+    import re
+    accs = []
+    epsilon = []
+    for line in lines:
+        accs.extend(re.findall(r'(?<=Acc@1: )\d+.\d+', line))
+        accs = list(map(float, accs))
+        epsilon.extend(re.findall(r'(?<=epsilon )\d+.\d+', line))
+        epsilon = list(map(float, epsilon))
+    return max(accs), min(epsilon)
+
+    
+    
