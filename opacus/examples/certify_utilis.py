@@ -1,6 +1,5 @@
 from __future__ import print_function
 from os import EX_OSFILE
-from pyvacy.pyvacy.analysis.epsilon_calculation import epsilon
 import numpy as np
 from numpy.core.numeric import binary_repr
 from statsmodels.stats.proportion import (

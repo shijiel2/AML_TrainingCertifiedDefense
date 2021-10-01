@@ -9,9 +9,10 @@ from subprocess import Popen
 from certify_utilis import get_dir, extract_summary
 
 from notification import NOTIFIER
+from datetime import datetime
 
 
-MODE = ['train', 'ncertify', 'nplot', 'neval', 'nsub-acc-test', 'nsummary']
+MODE = ['ntrain', 'certify', 'nplot', 'neval', 'nsub-acc-test', 'nsummary']
 DATASET = 'cifar10'
 TRAIN_MODE = 'Sub-DP' # DP, Sub-DP, Bagging, Sub-DP-no-amp
 
@@ -42,12 +43,12 @@ elif DATASET == 'cifar10':
     results_folder = '../results/cifar10'
     model_name = 'ConvNet'
     training_size = 50000
-    n_runss = [1]
+    n_runss = [1000]
     epochss = [90]
     sigmas = [1.0]
-    sample_rates = [256/5000, 512/5000, 1024/5000] # 256
-    lrs = [0.01, 0.005, 0.001] # 0.01
-    clips = [20.0, 25.0, 30.0, 35.0] # 25
+    sample_rates = [256/5000]
+    lrs = [0.01]
+    clips = [25]
     sub_training_sizes = [5000]
     
 
@@ -101,8 +102,9 @@ if 'summary' in MODE:
             acc, eps = extract_summary(lines)
             summarys.append((dir_path, acc, eps))
     summarys.sort(key=lambda x:x[1])
-    with open(f'{results_folder}/summary.txt', 'w') as f:
-        f.write(str(summarys))    
+    with open(f'{results_folder}/summary_{datetime.now()}.txt', 'w') as f:
+        for line in summarys:
+            f.write(str(line) + '\n')
 
 
 NOTIFIER.notify(socket.gethostname(), 'Job Done.')

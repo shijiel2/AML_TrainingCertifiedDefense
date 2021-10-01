@@ -287,6 +287,7 @@ if __name__ == "__main__":
     else:
         if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
 
+            # method_name = ['DP-Bagging', 'RDP', 'DP', 'Baseline-DP', 'Baseline-RDP-GP']
             method_name = ['DP-Bagging', 'RDP', 'DP', 'Baseline-DP', 'Baseline-RDP-GP']
             acc_list = []
             rad_list = []
