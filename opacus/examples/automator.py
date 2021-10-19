@@ -12,12 +12,12 @@ from notification import NOTIFIER
 from datetime import datetime
 
 
-MODE = ['ntrain', 'certify', 'nplot', 'neval', 'nsub-acc-test', 'nsummary']
+MODE = ['ntrain', 'ncertify', 'plot', 'neval', 'nsub-acc-test', 'nsummary']
 DATASET = 'cifar10'
 TRAIN_MODE = 'Sub-DP' # DP, Sub-DP, Bagging, Sub-DP-no-amp
 
 
-TRAIN_COMMAND = 'python {dataset}.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr} -c {c} --sub-training-size {sub_training_size} --save-model --train-mode {train_mode}'
+TRAIN_COMMAND = 'python {dataset}.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr} -c {c} --sub-training-size {sub_training_size} --train-mode {train_mode}' # --save-model
 
 EVAL_COMMAND = 'python {dataset}.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr} -c {c} --sub-training-size {sub_training_size} --load-model --train-mode {train_mode}'
 
@@ -45,11 +45,11 @@ elif DATASET == 'cifar10':
     training_size = 50000
     n_runss = [1000]
     epochss = [90]
-    sigmas = [1.0]
-    sample_rates = [256/5000]
-    lrs = [0.01]
-    clips = [25]
-    sub_training_sizes = [5000]
+    sigmas = [2.0] # sigmas = [1.0, 1.5, 2.0]
+    sample_rates = [512/10000] # sample_rates = [512/10000, 1024/10000]
+    lrs = [0.01] # lrs = [0.01, 0.05, 0.1]
+    clips = [25.0] # clips = [20.0, 25.0, 30.0]
+    sub_training_sizes = [10000]
     
 
 if 'train' in MODE:

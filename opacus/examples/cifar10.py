@@ -644,11 +644,11 @@ def main():
             dp_epsilon, best_alpha = optimizer.privacy_engine.get_privacy_spent(args.delta)
             rdp_steps = optimizer.privacy_engine.steps
             logging.info(f"epsilon {dp_epsilon}, best_alpha {best_alpha}, steps {rdp_steps}")
-            if args.save_model:
-                np.save(f"{result_folder}/rdp_epsilons", rdp_epsilons)
-                np.save(f"{result_folder}/rdp_alphas", rdp_alphas)
-                np.save(f"{result_folder}/rdp_steps", rdp_steps)
-                np.save(f"{result_folder}/dp_epsilon", dp_epsilon)
+            
+            np.save(f"{result_folder}/rdp_epsilons", rdp_epsilons)
+            np.save(f"{result_folder}/rdp_alphas", rdp_alphas)
+            np.save(f"{result_folder}/rdp_steps", rdp_steps)
+            np.save(f"{result_folder}/dp_epsilon", dp_epsilon)
         
         # save preds and model
         aggregate_result[np.arange(0, len(test_dataset)), pred(args, model, test_dataset, device).cpu()] += 1

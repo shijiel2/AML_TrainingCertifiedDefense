@@ -100,7 +100,7 @@ parser.add_argument(
 parser.add_argument(
     "--radius-range",
     type=int,
-    default=150,
+    default=20,
     help="Size of training set",
 )
 parser.add_argument(
@@ -168,7 +168,7 @@ def certify(method_name):
         1e-50,
         1e-50,
     )  # for simplicity, we use 1e-50 for both delta_l and delta_s, they are actually smaller than 1e-50 in mnist.
-
+    dp_bagging_rads = []
     for idx in tqdm(range(num_data)):
         ls = aggregate_result[idx][-1]
         class_freq = aggregate_result[idx][:-1]
@@ -180,7 +180,6 @@ def certify(method_name):
         probability_bar = CI[:, 1] + delta_s
         probability_bar = np.clip(probability_bar, a_min=-1, a_max=1 - pABar)
         probability_bar[ls] = pABar - delta_l
-        probability_bar_copy = np.array(probability_bar, copy=True)
         if method_name == 'dp':
             rd = CertifyRadiusDP(args, ls, probability_bar, dp_epsilon, 1e-5)
         elif method_name == 'dp_baseline_size_one':
@@ -194,18 +193,22 @@ def certify(method_name):
         elif method_name == 'best':
             rd1 = CertifyRadiusDP(args, ls, probability_bar, dp_epsilon, 1e-5)
             rd2 = CertifyRadiusRDP(
-                args, ls, probability_bar_copy, rdp_steps, args.sample_rate, args.sigma)
+                args, ls, np.array(probability_bar, copy=True), rdp_steps, args.sample_rate, args.sigma)
             rd = max(rd1, rd2)
         elif method_name == 'bagging':
             rd = CertifyRadiusBS(ls, probability_bar, args.sub_training_size, args.training_size)
         elif method_name == 'dp_bagging':
-            rd = CertifyRadiusDPBS(args, ls, probability_bar, args.sub_training_size, args.training_size, dp_epsilon, 1e-5, rdp_steps, args.sample_rate, args.sigma)
+            rd, dp_rad = CertifyRadiusDPBS(args, ls, probability_bar, args.sub_training_size, args.training_size, dp_epsilon, 1e-5, rdp_steps, args.sample_rate, args.sigma)
+            dp_bagging_rads.append(dp_rad)
         else:
             logging.warn(f'Invalid certify method name {method_name}')
             exit(1)
         certified_poisoning_size_array[idx] = rd
         # print('radius:', rd)
         # exit()
+
+    if method_name == 'dp_bagging':
+        np.save(f"{result_folder}/dp_bagging_rads.npy", dp_bagging_rads)
 
     certified_acc_list, certified_radius_list = certified_acc_against_radius(
         certified_poisoning_size_array)
@@ -279,16 +282,46 @@ if __name__ == "__main__":
             # np.save(f"{result_folder}/dp_baseline_size_one_cpsa.npy", certify('dp_baseline_size_one'))
             # np.save(f"{result_folder}/best_dp_cpsa.npy", certify('best'))
             if args.train_mode == 'Sub-DP':
+                certify('dp_bagging')
                 np.save(f"{result_folder}/dp_bagging_cpsa.npy", certify('dp_bagging'))
         elif args.train_mode == 'Bagging':
             np.save(f"{result_folder}/bagging_cpsa.npy", certify('bagging'))
 
     # Plot
     else:
+
+        # bagging_cpsa = np.load(f"{result_folder}/bagging_cpsa.npy")
+        # dp_bagging_cpsa = np.load(f"{result_folder}/dp_bagging_cpsa.npy")
+
+        # stat_dict = {'bagging uncertified idx': [],
+        #              'dp-bagging uncertified idx': [],
+        #             }
+        # for idx in range(len(bagging_cpsa)):
+        #     # print(bagging_cpsa[idx], dp_bagging_cpsa[idx])
+        #     bg_rad = bagging_cpsa[idx]
+        #     dbg_rad = dp_bagging_cpsa[idx]
+        #     if bg_rad == -1:
+        #         stat_dict['bagging uncertified idx'].append(idx)
+        #     if dbg_rad == -1:
+        #         stat_dict['dp-bagging uncertified idx'].append(idx)
+        # print(len(stat_dict['bagging uncertified idx']))
+        # print(len(stat_dict['dp-bagging uncertified idx']))
+        # exit()
+
+        # dp_bagging_rads = np.load(f"{result_folder}/dp_bagging_rads.npy")
+        # count = {}
+        # for rad in dp_bagging_rads:
+        #     if rad in count:
+        #         count[rad] += 1
+        #     else:
+        #         count[rad] = 1
+        # print(count)
+        # exit()
+
         if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
 
-            # method_name = ['DP-Bagging', 'RDP', 'DP', 'Baseline-DP', 'Baseline-RDP-GP']
-            method_name = ['DP-Bagging', 'RDP', 'DP', 'Baseline-DP', 'Baseline-RDP-GP']
+            method_name = ['DP', 'RDP', 'DP-Bagging', 'Baseline-Bagging']
+            # method_name = ['DP-Bagging', 'RDP', 'DP', 'Baseline-DP', 'Baseline-RDP-GP', 'Baseline-Bagging']
             acc_list = []
             rad_list = []
             for name in method_name:

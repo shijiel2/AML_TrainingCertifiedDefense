@@ -176,7 +176,10 @@ def check_condition_rdp(args, radius, sample_rate, steps, alpha, delta, sigma, p
         _, eps = rdp_amplify(alpha, args.sub_training_size, args.training_size, sample_rate, sigma)
         eps *= steps
 
-    val = np.e**(-eps) * p1**(alpha/(alpha-1)) - (np.e**eps * p2)**((alpha-1)/alpha)
+    val1 = np.e**(-eps) * p1**(alpha/(alpha-1))
+    val2 = (np.e**eps * p2)**((alpha-1)/alpha)
+    val = val1 - val2
+
     if val >= 0:
         return True
     else:
@@ -422,7 +425,7 @@ def CertifyRadiusDPBS(args, ls, probability_bar, k, n, epsilon, delta, steps, sa
     probability_bar[ls] = -1
     runner_up_prob = np.amax(probability_bar)
     if p_ls <= runner_up_prob:
-        return -1
+        return -1, dp_rad
     low, high = 0, 1500
     while low <= high:
         radius = math.ceil((low+high)/2.0)
@@ -432,7 +435,7 @@ def CertifyRadiusDPBS(args, ls, probability_bar, k, n, epsilon, delta, steps, sa
             high = radius - 1
     radius = math.floor(low)
     if check_condition_dp_bagging(radius, k, n, p_ls, runner_up_prob, dp_rad):
-        return radius
+        return radius, dp_rad
     else:
         print("error")
         raise ValueError
