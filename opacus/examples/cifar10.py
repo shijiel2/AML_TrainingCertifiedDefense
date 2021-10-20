@@ -27,6 +27,7 @@ from opacus.utils.uniform_sampler import UniformWithReplacementSampler, FixedSiz
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torchvision.datasets import CIFAR10
 from tqdm import tqdm
+from models import ResNet18
 
 
 def setup():
@@ -170,6 +171,17 @@ def pred(args, model, test_dataset, device):
     y_pred = model(X).max(1)[1]
 
     return y_pred
+
+
+def softmax(args, model, test_dataset, device):
+    model.eval()
+
+    X, y = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))
+    X, y  = X.to(device), y.to(device)
+
+    softmax = nn.Softmax(dim=1)(model(X))
+
+    return softmax
 
 
 # flake8: noqa: C901
@@ -551,6 +563,7 @@ def main():
     # collect votes from all models
     test_dataset, test_loader = gen_test_dataset_loader()
     aggregate_result = np.zeros([len(test_dataset), 10 + 1], dtype=np.int)
+    aggregate_result_softmax = np.zeros([len(test_dataset), 10 + 1], dtype=np.float32)
     acc_list = []
 
     # use this code for "sub_training_size V.S. acc"
@@ -562,8 +575,9 @@ def main():
         
         # Define the model
         if args.model_name == 'ConvNet':
-            model = convnet(num_classes=10)
-            model = model.to(device)
+            model = convnet(num_classes=10).to(device)
+        elif args.model_name == 'ResNet18':
+            model = ResNet18(num_classes=10).to(device)
         else:
             exit(f'Model name {args.model_name} invaild.')
         if distributed:
@@ -652,13 +666,16 @@ def main():
         
         # save preds and model
         aggregate_result[np.arange(0, len(test_dataset)), pred(args, model, test_dataset, device).cpu()] += 1
+        aggregate_result_softmax[np.arange(0, len(test_dataset)), 0:10] += softmax(args, model, test_dataset, device).cpu().detach().numpy()
         acc_list.append(test(args, model, test_loader, device))
         if not args.load_model and args.save_model:
             torch.save(model.state_dict(), f"{models_folder}/model_{run_idx}.pt")
 
     # Finish trining all models, save results
     aggregate_result[np.arange(0, len(test_dataset)), -1] = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))[1]
+    aggregate_result_softmax[np.arange(0, len(test_dataset)), -1] = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))[1]
     np.save(f"{result_folder}/aggregate_result", aggregate_result)
+    np.save(f"{result_folder}/aggregate_result_softmax", aggregate_result_softmax)
     np.save(f"{result_folder}/acc_list", acc_list)
 
     # use this code for "sub_training_size V.S. acc"
