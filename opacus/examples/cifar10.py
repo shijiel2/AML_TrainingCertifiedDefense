@@ -563,7 +563,7 @@ def main():
     # collect votes from all models
     test_dataset, test_loader = gen_test_dataset_loader()
     aggregate_result = np.zeros([len(test_dataset), 10 + 1], dtype=np.int)
-    aggregate_result_softmax = np.zeros([len(test_dataset), 10 + 1], dtype=np.float32)
+    aggregate_result_softmax = np.zeros([args.n_runs, len(test_dataset), 10 + 1], dtype=np.float32)
     acc_list = []
 
     # use this code for "sub_training_size V.S. acc"
@@ -646,34 +646,34 @@ def main():
             if run_idx == 0:
                 np.save(f"{result_folder}/epoch_acc_eps", epoch_acc_epsilon)
             
-        # Post-training stuff 
+            # Post-training stuff 
 
-        # use this code for "sub_training_size V.S. acc"
-        if args.sub_acc_test:
-            sub_acc_list.append((sub_training_size, test(args, model, test_loader, device)))
+            # use this code for "sub_training_size V.S. acc"
+            if args.sub_acc_test:
+                sub_acc_list.append((sub_training_size, test(args, model, test_loader, device)))
 
-        # save the DP related data
-        if run_idx == 0 and args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
-            rdp_alphas, rdp_epsilons = optimizer.privacy_engine.get_rdp_privacy_spent()
-            dp_epsilon, best_alpha = optimizer.privacy_engine.get_privacy_spent(args.delta)
-            rdp_steps = optimizer.privacy_engine.steps
-            logging.info(f"epsilon {dp_epsilon}, best_alpha {best_alpha}, steps {rdp_steps}")
-            
-            np.save(f"{result_folder}/rdp_epsilons", rdp_epsilons)
-            np.save(f"{result_folder}/rdp_alphas", rdp_alphas)
-            np.save(f"{result_folder}/rdp_steps", rdp_steps)
-            np.save(f"{result_folder}/dp_epsilon", dp_epsilon)
+            # save the DP related data
+            if run_idx == 0 and args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
+                rdp_alphas, rdp_epsilons = optimizer.privacy_engine.get_rdp_privacy_spent()
+                dp_epsilon, best_alpha = optimizer.privacy_engine.get_privacy_spent(args.delta)
+                rdp_steps = optimizer.privacy_engine.steps
+                logging.info(f"epsilon {dp_epsilon}, best_alpha {best_alpha}, steps {rdp_steps}")
+                
+                np.save(f"{result_folder}/rdp_epsilons", rdp_epsilons)
+                np.save(f"{result_folder}/rdp_alphas", rdp_alphas)
+                np.save(f"{result_folder}/rdp_steps", rdp_steps)
+                np.save(f"{result_folder}/dp_epsilon", dp_epsilon)
         
         # save preds and model
         aggregate_result[np.arange(0, len(test_dataset)), pred(args, model, test_dataset, device).cpu()] += 1
-        aggregate_result_softmax[np.arange(0, len(test_dataset)), 0:10] += softmax(args, model, test_dataset, device).cpu().detach().numpy()
+        aggregate_result_softmax[run_idx, np.arange(0, len(test_dataset)), 0:10] = softmax(args, model, test_dataset, device).cpu().detach().numpy()
         acc_list.append(test(args, model, test_loader, device))
         if not args.load_model and args.save_model:
             torch.save(model.state_dict(), f"{models_folder}/model_{run_idx}.pt")
 
     # Finish trining all models, save results
     aggregate_result[np.arange(0, len(test_dataset)), -1] = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))[1]
-    aggregate_result_softmax[np.arange(0, len(test_dataset)), -1] = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))[1]
+    aggregate_result_softmax[:, np.arange(0, len(test_dataset)), -1] = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))[1]
     np.save(f"{result_folder}/aggregate_result", aggregate_result)
     np.save(f"{result_folder}/aggregate_result_softmax", aggregate_result_softmax)
     np.save(f"{result_folder}/acc_list", acc_list)

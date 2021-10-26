@@ -20,7 +20,13 @@ from certify_utilis import *
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--alpha", type=float, default="0.001")
+parser.add_argument(
+    "--alpha",
+    type=float,
+    default=0.001,
+    metavar="SR",
+    help="alpha used in estimate prob bar",
+)
 parser.add_argument(
     "-sr",
     "--sample-rate",
@@ -80,10 +86,10 @@ parser.add_argument(
     help="Name of the model",
 )
 parser.add_argument(
-    "--plot",
-    action="store_true",
-    default=False,
-    help="plot the certified acc",
+    "--mode",
+    type=str,
+    default="certify",
+    help="mode of the file",
 )
 parser.add_argument(
     "--training-size",
@@ -157,48 +163,56 @@ def plot_certified_acc(c_acc_lists, c_rad_lists, name_list, plot_path, xlabel='N
     plt.clf()
 
 
+def plot_interval(rad, lower, upper, xrange, plot_path, ylim=None):
+    fig, ax = plt.subplots()
+    ax.bar(xrange, upper, width=0.7, label='p1')
+    ax.bar(xrange, lower, width=0.7, label='p2')
+    ax.scatter(xrange, rad, s=0.7, label='rad', marker="s")
+    if ylim:
+        plt.ylim(ylim)
+    ax.legend()
+    plt.savefig(plot_path, bbox_inches='tight')
+    plt.clf()
+
+
 def certify(method_name):
-    pred_data = aggregate_result[:, :10]
-    pred = np.argmax(pred_data, axis=1)
-    gt = aggregate_result[:, 10]
-    logging.info(f"Clean acc: {(gt == pred).sum() / len(pred)}")
+    if 'softmax' not in method_name:
+        gt, pred = aggres_meta_info(aggregate_result)
+        logging.info(f"Clean acc: {(gt == pred).sum() / len(pred)}")
+    else:
+        aggregate_result_softmax_rm = np.mean(aggregate_result_softmax, axis=0)  
+        gt, pred = aggres_meta_info(aggregate_result_softmax_rm)
+        logging.info(f"Clean acc: {(gt == pred).sum() / len(pred)}")
 
     certified_poisoning_size_array = np.zeros([num_data], dtype=np.int)
-    delta_l, delta_s = (
-        1e-50,
-        1e-50,
-    )  # for simplicity, we use 1e-50 for both delta_l and delta_s, they are actually smaller than 1e-50 in mnist.
     dp_bagging_rads = []
+
     for idx in tqdm(range(num_data)):
-        ls = aggregate_result[idx][-1]
-        class_freq = aggregate_result[idx][:-1]
-        if method_name != 'bagging':
-            CI = multi_ci(class_freq, float(args.alpha))
+        # Multinomial or Softmax scores
+        if 'softmax' not in method_name:
+            CI, ls = confident_interval_multinomial(aggregate_result, idx, method_name, float(args.alpha))
         else:
-            CI = multi_ci_bagging(class_freq, float(args.alpha))
-        pABar = CI[ls][0]
-        probability_bar = CI[:, 1] + delta_s
-        probability_bar = np.clip(probability_bar, a_min=-1, a_max=1 - pABar)
-        probability_bar[ls] = pABar - delta_l
-        if method_name == 'dp':
-            rd = CertifyRadiusDP(args, ls, probability_bar, dp_epsilon, 1e-5)
+            CI, ls = confident_interval_softmax(aggregate_result_softmax, aggregate_result_softmax_rm, idx, method_name, float(args.alpha))
+
+        if method_name == 'dp' or method_name == 'dp_softmax':
+            rd = CertifyRadiusDP(args, ls, CI, dp_epsilon, 1e-5)
         elif method_name == 'dp_baseline_size_one':
-            rd = CertifyRadiusDP_baseline(args, ls, probability_bar, dp_epsilon, 1e-5)
+            rd = CertifyRadiusDP_baseline(args, ls, CI, dp_epsilon, 1e-5)
         elif method_name == 'rdp':
-            rd = CertifyRadiusRDP(args, ls, probability_bar,
+            rd = CertifyRadiusRDP(args, ls, CI,
                                   rdp_steps, args.sample_rate, args.sigma)
         elif method_name == 'rdp_gp':
-            rd = CertifyRadiusRDP_GP(args, ls, probability_bar,
+            rd = CertifyRadiusRDP_GP(args, ls, CI,
                                   rdp_steps, args.sample_rate, args.sigma)
         elif method_name == 'best':
-            rd1 = CertifyRadiusDP(args, ls, probability_bar, dp_epsilon, 1e-5)
+            rd1 = CertifyRadiusDP(args, ls, CI, dp_epsilon, 1e-5)
             rd2 = CertifyRadiusRDP(
-                args, ls, np.array(probability_bar, copy=True), rdp_steps, args.sample_rate, args.sigma)
+                args, ls, CI, rdp_steps, args.sample_rate, args.sigma)
             rd = max(rd1, rd2)
         elif method_name == 'bagging':
-            rd = CertifyRadiusBS(ls, probability_bar, args.sub_training_size, args.training_size)
+            rd = CertifyRadiusBS(ls, CI, args.sub_training_size, args.training_size)
         elif method_name == 'dp_bagging':
-            rd, dp_rad = CertifyRadiusDPBS(args, ls, probability_bar, args.sub_training_size, args.training_size, dp_epsilon, 1e-5, rdp_steps, args.sample_rate, args.sigma)
+            rd, dp_rad = CertifyRadiusDPBS(args, ls, CI, args.sub_training_size, args.training_size, dp_epsilon, 1e-5, rdp_steps, args.sample_rate, args.sigma)
             dp_bagging_rads.append(dp_rad)
         else:
             logging.warn(f'Invalid certify method name {method_name}')
@@ -254,6 +268,8 @@ if __name__ == "__main__":
 
     # laod data
     aggregate_result = np.load(f"{result_folder}/aggregate_result.npy")
+    aggregate_result_softmax = np.load(f"{result_folder}/aggregate_result_softmax.npy")
+
     num_class = aggregate_result.shape[1] - 1
     num_data = aggregate_result.shape[0]
 
@@ -274,50 +290,51 @@ if __name__ == "__main__":
         logging.info(f'aggregate results:\n{aggregate_result}')
 
     # Certify
-    if not args.plot:
+    if args.mode == 'certify':
         if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
             np.save(f"{result_folder}/dp_cpsa.npy", certify('dp'))
             np.save(f"{result_folder}/rdp_cpsa.npy", certify('rdp'))    
             np.save(f"{result_folder}/rdp_gp_cpsa.npy", certify('rdp_gp'))  
             # np.save(f"{result_folder}/dp_baseline_size_one_cpsa.npy", certify('dp_baseline_size_one'))
             # np.save(f"{result_folder}/best_dp_cpsa.npy", certify('best'))
+            # np.save(f"{result_folder}/dp_softmax_cpsa.npy", certify('dp_softmax'))
             if args.train_mode == 'Sub-DP':
-                certify('dp_bagging')
                 np.save(f"{result_folder}/dp_bagging_cpsa.npy", certify('dp_bagging'))
         elif args.train_mode == 'Bagging':
             np.save(f"{result_folder}/bagging_cpsa.npy", certify('bagging'))
 
+    
+    # Ablation
+    elif args.mode == 'ablation':
+        test_size = 100
+
+        method_name = 'bagging'
+        p1_list, p2_list, rad_list = p1_p2_rad(test_size, np.load(f"{result_folder}/aggregate_result_bagging.npy"), np.load(f"{result_folder}/bagging_cpsa.npy"), method_name, args.alpha)
+        plot_interval(rad_list, p2_list, p1_list, range(test_size), f"{result_folder}/{method_name}_p1_p2_interval.png", ylim=[0,13])
+
+        method_name = 'dp_bagging'
+        p1_list, p2_list, rad_list = p1_p2_rad(test_size, aggregate_result, np.load(f"{result_folder}/dp_bagging_cpsa.npy"), method_name, args.alpha)
+        plot_interval(rad_list, p2_list, p1_list, range(test_size), f"{result_folder}/{method_name}_p1_p2_interval.png", ylim=[0,13])
+
+        # method_name = 'dp'
+        # p1_list, p2_list, rad_list = p1_p2_rad(test_size, aggregate_result, [0]*num_data, method_name, args.alpha)
+        # plot_interval(rad_list, p2_list, p1_list, range(test_size), f"{result_folder}/{method_name}_p1_p2_norad_interval.png", ylim=[0,1])
+
+        # method_name = 'dp_softmax'
+        # p1_list, p2_list, rad_list = p1_p2_rad(test_size, aggregate_result_softmax, [0]*num_data, method_name, args.alpha, aggregate_result_rm=np.mean(aggregate_result_softmax, axis=0))
+        # plot_interval(rad_list, p2_list, p1_list, range(test_size), f"{result_folder}/{method_name}_p1_p2_norad_interval.png", ylim=[0,1])
+        
+        # method_name = 'dp'
+        # p1_list, p2_list, rad_list = p1_p2_rad(test_size, aggregate_result, np.load(f"{result_folder}/dp_cpsa.npy"), method_name, args.alpha)
+        # plot_interval(rad_list, p2_list, p1_list, range(test_size), f"{result_folder}/{method_name}_p1_p2_interval.png")
+
+        # method_name = 'dp_softmax'
+        # p1_list, p2_list, rad_list = p1_p2_rad(test_size, aggregate_result_softmax, np.load(f"{result_folder}/dp_softmax_cpsa.npy"), method_name, args.alpha, aggregate_result_rm=np.mean(aggregate_result_softmax, axis=0))
+        # plot_interval(rad_list, p2_list, p1_list, range(test_size), f"{result_folder}/{method_name}_p1_p2_interval.png")
+        
+        
     # Plot
-    else:
-
-        # bagging_cpsa = np.load(f"{result_folder}/bagging_cpsa.npy")
-        # dp_bagging_cpsa = np.load(f"{result_folder}/dp_bagging_cpsa.npy")
-
-        # stat_dict = {'bagging uncertified idx': [],
-        #              'dp-bagging uncertified idx': [],
-        #             }
-        # for idx in range(len(bagging_cpsa)):
-        #     # print(bagging_cpsa[idx], dp_bagging_cpsa[idx])
-        #     bg_rad = bagging_cpsa[idx]
-        #     dbg_rad = dp_bagging_cpsa[idx]
-        #     if bg_rad == -1:
-        #         stat_dict['bagging uncertified idx'].append(idx)
-        #     if dbg_rad == -1:
-        #         stat_dict['dp-bagging uncertified idx'].append(idx)
-        # print(len(stat_dict['bagging uncertified idx']))
-        # print(len(stat_dict['dp-bagging uncertified idx']))
-        # exit()
-
-        # dp_bagging_rads = np.load(f"{result_folder}/dp_bagging_rads.npy")
-        # count = {}
-        # for rad in dp_bagging_rads:
-        #     if rad in count:
-        #         count[rad] += 1
-        #     else:
-        #         count[rad] = 1
-        # print(count)
-        # exit()
-
+    elif args.mode == 'plot':
         if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
 
             method_name = ['DP', 'RDP', 'DP-Bagging', 'Baseline-Bagging']
