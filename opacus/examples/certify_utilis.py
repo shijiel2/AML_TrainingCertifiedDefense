@@ -180,7 +180,34 @@ def check_condition_dp_baseline(args, radius_value, epsilon, delta, p_l_value, p
         return False
 
 
-def check_condition_rdp(args, radius, sample_rate, steps, alpha, delta, sigma, p1, p2):
+def rdp_bounds(sample_rate, steps, alpha, sigma, p1, p2, softmax, amplify=False, training_size=None, sub_training_size=None):
+    if not amplify:
+        rdp = PrivacyEngine._get_renyi_divergence(
+            sample_rate=sample_rate, noise_multiplier=sigma, alphas=[alpha]) * steps
+        eps = rdp.cpu().detach().numpy()[0]
+    else:
+        _, eps = rdp_amplify(alpha, sub_training_size,
+                             training_size, sample_rate, sigma)
+        eps *= steps
+    
+    if not softmax:
+        lower = np.e**(-eps) * p1**(alpha/(alpha-1))
+        upper = (np.e**eps * p2)**((alpha-1)/alpha)
+    else:
+        aa = (alpha-1)/alpha
+        eea = np.e**(eps*aa)
+        ba = (1/2)**(1/alpha)
+        inv_aa = alpha/(alpha-1)
+        inv_eea = np.e**(-eps*aa)
+        inv_ba = (1/2)**(-1/alpha)
+
+        lower = (inv_eea * inv_ba * p1)**inv_aa
+        upper = eea * ba * (p2)**aa
+
+    return min(max(lower, 0), 1), max(min(upper, 1), 0)
+    # return lower, upper
+
+def check_condition_rdp(args, radius, sample_rate, steps, alpha, delta, sigma, p1, p2, softmax):
 
     if radius == 0:
         return True
@@ -188,19 +215,12 @@ def check_condition_rdp(args, radius, sample_rate, steps, alpha, delta, sigma, p
     sample_rate = 1 - (1 - sample_rate)**radius
 
     if args.train_mode == 'DP' or args.train_mode == 'Sub-DP-no-amp':
-        rdp = PrivacyEngine._get_renyi_divergence(
-            sample_rate=sample_rate, noise_multiplier=sigma, alphas=[alpha]) * steps
-        eps = rdp.cpu().detach().numpy()[0]
+        lower, upper = rdp_bounds(sample_rate, steps, alpha, sigma, p1, p2, softmax)
     elif args.train_mode == 'Sub-DP':
-        _, eps = rdp_amplify(alpha, args.sub_training_size,
-                             args.training_size, sample_rate, sigma)
-        eps *= steps
-
-    val1 = np.e**(-eps) * p1**(alpha/(alpha-1))
-    val2 = (np.e**eps * p2)**((alpha-1)/alpha)
-    val = val1 - val2
-
-    if val >= 0:
+        lower, upper = rdp_bounds(sample_rate, steps, alpha, sigma, p1, p2, softmax, amplify=True, training_size=args.training_size, sub_training_size=args.sub_training_size)
+    
+    val = lower - upper
+    if val > 0:
         return True
     else:
         return False
@@ -228,7 +248,7 @@ def check_condition_rdp_gp(args, radius, sample_rate, steps, alpha, delta, sigma
 
     val = np.e**(-eps) * p1**(alpha/(alpha-1)) - \
         (np.e**eps * p2)**((alpha-1)/alpha)
-    if val >= 0:
+    if val > 0:
         return True
     else:
         return False
@@ -265,6 +285,28 @@ def check_condition_dp_bagging(radius_value, k_value, n_value, p_l_value, p_s_va
         return True
     else:
         return False
+
+
+def check_condition_dp_bagging_softmax_prob(radius_value, sample_rate, steps, alpha, sigma, k_value, n_value, l1_lower, l1_upper, l2_lower, l2_upper):
+    if radius_value == 0:
+        return True
+
+    pi_l1_lower, pi_l1_upper = rdp_bounds(sample_rate, steps, alpha, sigma, l1_lower, l1_upper, softmax=True)
+    pi_l2_lower, pi_l2_upper = rdp_bounds(sample_rate, steps, alpha, sigma, l2_lower, l2_upper, softmax=True)
+
+    p = 1 - ((n_value-radius_value)/n_value)**k_value
+    omega1 = (pi_l1_upper-pi_l1_lower) * p
+    omega2 = (pi_l2_upper-pi_l2_lower) * p
+
+    val1 = l1_lower - omega1
+    val2 = l2_upper + omega2
+    val = val1-val2
+
+    if val > 0:
+        return True
+    else:
+        return False
+
 
 
 def check_condition_bagging(radius_value, k_value, n_value, p_l_value, p_s_value):
@@ -339,7 +381,7 @@ def CertifyRadiusDP_baseline(args, ls, CI, epsilon, delta):
         raise ValueError
 
 
-def CertifyRadiusRDP(args, ls, CI, steps, sample_rate, sigma):
+def CertifyRadiusRDP(args, ls, CI, steps, sample_rate, sigma, softmax=False):
     p1, p2 = top2_probs(CI, ls)
     if p1 <= p2:
         return -1
@@ -349,15 +391,15 @@ def CertifyRadiusRDP(args, ls, CI, steps, sample_rate, sigma):
         # for delta in [x / 100.0 for x in range(1, 10)]:
         for delta in [0]:
             # binary search for radius
-            low, high = 0, 1000
+            low, high = 0, 50
             while low <= high:
                 radius = math.ceil((low + high) / 2.0)
-                if check_condition_rdp(args, radius=radius, sample_rate=sample_rate, steps=steps, alpha=alpha, delta=delta, sigma=sigma, p1=p1, p2=p2):
+                if check_condition_rdp(args, radius=radius, sample_rate=sample_rate, steps=steps, alpha=alpha, delta=delta, sigma=sigma, p1=p1, p2=p2, softmax=softmax):
                     low = radius + 0.1
                 else:
                     high = radius - 1
             radius = math.floor(low)
-            if check_condition_rdp(args, radius=radius, sample_rate=sample_rate, steps=steps, alpha=alpha, delta=delta, sigma=sigma, p1=p1, p2=p2):
+            if check_condition_rdp(args, radius=radius, sample_rate=sample_rate, steps=steps, alpha=alpha, delta=delta, sigma=sigma, p1=p1, p2=p2, softmax=softmax):
                 valid_radius.add((radius, alpha, delta))
             elif radius == 0:
                 valid_radius.add((radius, alpha, delta))
@@ -431,12 +473,12 @@ def CertifyRadiusBS(ls, CI, k, n):
         raise ValueError
 
 
-def CertifyRadiusDPBS(args, ls, CI, k, n, epsilon, delta, steps, sample_rate, sigma):
+def CertifyRadiusDPBS(args, ls, CI, k, n, epsilon, delta, steps, sample_rate, sigma, softmax=False):
     # first using CertifyRadius_DP to find out the robustness we have in a sub-dataset
     # change train_mode to 'DP' to avoid dp amplification
     args.train_mode = 'DP'
     dp_rad = max(0, CertifyRadiusRDP(args, ls, CI, steps, sample_rate,
-                 sigma), CertifyRadiusDP(args, ls, CI, epsilon, delta))
+                 sigma, softmax=softmax), CertifyRadiusDP(args, ls, CI, epsilon, delta))
     args.train_mode = 'Sub-DP'
 
     # DP bagging part
@@ -444,7 +486,7 @@ def CertifyRadiusDPBS(args, ls, CI, k, n, epsilon, delta, steps, sample_rate, si
     p_ls, runner_up_prob = top2_probs(CI, ls)
     if p_ls <= runner_up_prob:
         return -1, dp_rad
-    low, high = 0, 1500
+    low, high = 0, 50
     while low <= high:
         radius = math.ceil((low+high)/2.0)
         if check_condition_dp_bagging(radius, k, n, p_ls, runner_up_prob, dp_rad):
@@ -457,6 +499,46 @@ def CertifyRadiusDPBS(args, ls, CI, k, n, epsilon, delta, steps, sample_rate, si
     else:
         print("error")
         raise ValueError
+
+
+def CertifyRadiusDPBS_softmax_prob(ls, CI, k, n, delta, steps, sample_rate, sigma):
+    l1_idx, l2_idx = top2_probs(CI, ls, return_index=True)
+    l1_lower, l1_upper = CI[l1_idx][0], CI[l1_idx][1]
+    l2_lower, l2_upper = CI[l2_idx][0], CI[l2_idx][1]
+
+    if l1_lower <= l2_upper:
+        return -1
+
+    valid_radius = set()
+    for alpha in [1 + x/10 for x in range(1, 1000)]:
+        # for delta in [x / 100.0 for x in range(1, 10)]:
+        for delta in [0]:
+            # binary search for radius
+            low, high = 0, 50
+            while low <= high:
+                radius = math.ceil((low + high) / 2.0)
+                if check_condition_dp_bagging_softmax_prob(radius, sample_rate, steps, alpha, sigma, k, n, l1_lower, l1_upper, l2_lower, l2_upper):
+                    low = radius + 0.1
+                else:
+                    high = radius - 1
+            radius = math.floor(low)
+            if check_condition_dp_bagging_softmax_prob(radius, sample_rate, steps, alpha, sigma, k, n, l1_lower, l1_upper, l2_lower, l2_upper):
+                valid_radius.add((radius, alpha, delta))
+            elif radius == 0:
+                valid_radius.add((radius, alpha, delta))
+            else:
+                print("error", (radius, alpha, delta))
+                raise ValueError
+
+    if len(valid_radius) > 0:
+        max_radius = max(valid_radius, key=lambda x: x[0])[0]
+        # for x in valid_radius:
+        #     if x[0] == max_radius:
+        #         print(x)
+        return max_radius
+    else:
+        return 0
+
 
 
 def get_dir(train_mode, results_folder, model_name, lr, sigma, max_per_sample_grad_norm, sample_rate, epochs, n_runs, sub_training_size):
@@ -518,14 +600,14 @@ def confident_interval_multinomial(aggregate_result, idx, method_name, alpha):
 
 
 def confident_interval_softmax(aggregate_result_softmax, aggregate_result_softmax_rm, idx, method_name, alpha):
-    if method_name == 'dp_softmax':
+    if 'softmax' in method_name:
         ls = int(aggregate_result_softmax_rm[idx][-1])
         # CI = multi_ci_softmax_hoeffding(aggregate_result_softmax_rm[idx][:-1], aggregate_result_softmax.shape[0], alpha)
         CI = multi_ci_softmax_normal(aggregate_result_softmax[:, idx, :-1], alpha)
     return CI, ls
 
 
-def top2_probs(CI, ls):
+def top2_probs(CI, ls, return_index=False):
     delta_l, delta_s = (
         1e-50,
         1e-50,
@@ -538,7 +620,10 @@ def top2_probs(CI, ls):
     p_ls = probability_bar[ls]
     probability_bar[ls] = -1
     runner_up_prob = np.amax(probability_bar)
-    return p_ls, runner_up_prob
+    if not return_index:
+        return p_ls, runner_up_prob
+    else:
+        return ls, np.argmax(probability_bar)
 
 
 def p1_p2_rad(test_size, aggregate_result, cpsa, method_name, alpha, aggregate_result_rm=None):

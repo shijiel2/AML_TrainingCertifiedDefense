@@ -10,7 +10,7 @@ from notification import NOTIFIER
 from datetime import datetime
 
 
-MODE = ['train', 'ncertify', 'nplot', 'nablation', 'neval', 'nsub-acc-test', 'nsummary']
+MODE = ['ntrain', 'certify', 'plot', 'nablation', 'neval', 'nsub-acc-test', 'nsummary']
 DATASET = 'cifar10'
 TRAIN_MODE = 'Sub-DP' # DP, Sub-DP, Bagging, Sub-DP-no-amp
 
@@ -37,14 +37,14 @@ if DATASET == 'mnist':
 
 elif DATASET == 'cifar10':
     results_folder = '../results/cifar10'
-    model_name = 'ResNet18'
+    model_name = 'ConvNet'
     training_size = 50000
-    n_runss = [1]
-    epochss = [100]
-    sigmas = [0.5, 1.0] # sigmas = [1.0, 1.5, 2.0]
-    sample_rates = [128/10000] # sample_rates = [512/10000, 1024/10000]
-    lrs = [0.01, 0.05, 0.1] # lrs = [0.01, 0.05, 0.1]
-    clips = [15.0, 20.0, 25.0, 30.0] # clips = [20.0, 25.0, 30.0]
+    n_runss = [1000]
+    epochss = [90]
+    sigmas = [2.0] # sigmas = [1.0, 1.5, 2.0]
+    sample_rates = [512/10000] # sample_rates = [512/10000, 1024/10000]
+    lrs = [0.01] # lrs = [0.01, 0.05, 0.1]
+    clips = [25.0] # clips = [20.0, 25.0, 30.0]
     sub_training_sizes = [10000]
     
 
@@ -111,4 +111,4 @@ if 'summary' in MODE:
             f.write(str(line) + '\n')
 
 
-NOTIFIER.notify(socket.gethostname(), 'Job Done.')
+# NOTIFIER.notify(socket.gethostname(), 'Job Done.')
