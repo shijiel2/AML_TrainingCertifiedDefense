@@ -3,14 +3,13 @@ import socket
 import sys
 
 sys.path.append("../..")
-from subprocess import Popen
+import subprocess
 from certify_utilis import get_dir, extract_summary
-
 from notification import NOTIFIER
 from datetime import datetime
 
 
-MODE = ['ntrain', 'certify', 'plot', 'nablation', 'neval', 'nsub-acc-test', 'nsummary']
+MODE = ['ntrain', 'certify', 'nplot', 'nablation', 'neval', 'nsub-acc-test', 'nsummary']
 DATASET = 'cifar10'
 TRAIN_MODE = 'Sub-DP' # DP, Sub-DP, Bagging, Sub-DP-no-amp
 
@@ -50,51 +49,41 @@ elif DATASET == 'cifar10':
 
 if 'train' in MODE:
     for nr, ep, sig, sr, lr, c, sts in itertools.product(n_runss, epochss, sigmas, sample_rates, lrs, clips, sub_training_sizes): 
-        print(TRAIN_COMMAND.format(dataset=DATASET, n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, sub_training_size=sts, train_mode=TRAIN_MODE))
-        proc = Popen(TRAIN_COMMAND.format(dataset=DATASET, n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, sub_training_size=sts, train_mode=TRAIN_MODE),
-                        shell=True,
-                        cwd='./')
-        proc.wait()
+        cmd = TRAIN_COMMAND.format(dataset=DATASET, n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, sub_training_size=sts, train_mode=TRAIN_MODE)
+        print(cmd)
+        subprocess.call(cmd.split())
+
 
 if 'certify' in MODE:
     for nr, ep, sig, sr, lr, c, sts in itertools.product(n_runss, epochss, sigmas, sample_rates, lrs, clips, sub_training_sizes): 
-        print(CERTIFY_COMMAND.format(n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder, training_size=training_size, sub_training_size=sts, train_mode=TRAIN_MODE, mode='certify'))
-        proc = Popen(CERTIFY_COMMAND.format(n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder, training_size=training_size, sub_training_size=sts, train_mode=TRAIN_MODE, mode='certify'),
-                        shell=True,
-                        cwd='./')
-        proc.wait()
+        cmd = CERTIFY_COMMAND.format(n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder, training_size=training_size, sub_training_size=sts, train_mode=TRAIN_MODE, mode='certify')
+        print(cmd)
+        subprocess.call(cmd.split())
+        
 
 if 'plot' in MODE:
     for nr, ep, sig, sr, lr, c, sts in itertools.product(n_runss, epochss, sigmas, sample_rates, lrs, clips, sub_training_sizes): 
-        print(CERTIFY_COMMAND.format(n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder, training_size=training_size, sub_training_size=sts, train_mode=TRAIN_MODE, mode='plot'))
-        proc = Popen(CERTIFY_COMMAND.format(n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder, training_size=training_size, sub_training_size=sts, train_mode=TRAIN_MODE, mode='plot'),
-                        shell=True,
-                        cwd='./')
-        proc.wait()
+        cmd = CERTIFY_COMMAND.format(n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder, training_size=training_size, sub_training_size=sts, train_mode=TRAIN_MODE, mode='plot')
+        print(cmd)
+        subprocess.call(cmd.split())
 
 if 'ablation' in MODE:
     for nr, ep, sig, sr, lr, c, sts in itertools.product(n_runss, epochss, sigmas, sample_rates, lrs, clips, sub_training_sizes): 
-        print(CERTIFY_COMMAND.format(n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder, training_size=training_size, sub_training_size=sts, train_mode=TRAIN_MODE, mode='ablation'))
-        proc = Popen(CERTIFY_COMMAND.format(n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder, training_size=training_size, sub_training_size=sts, train_mode=TRAIN_MODE, mode='ablation'),
-                        shell=True,
-                        cwd='./')
-        proc.wait()
+        cmd = CERTIFY_COMMAND.format(n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, results_folder=results_folder, training_size=training_size, sub_training_size=sts, train_mode=TRAIN_MODE, mode='ablation')
+        print(cmd)
+        subprocess.call(cmd.split())
 
 if 'eval' in MODE:
     for nr, ep, sig, sr, lr, c, sts in itertools.product(n_runss, epochss, sigmas, sample_rates, lrs, clips, sub_training_sizes): 
-        print(EVAL_COMMAND.format(dataset=DATASET, n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, sub_training_size=sts, train_mode=TRAIN_MODE))
-        proc = Popen(EVAL_COMMAND.format(dataset=DATASET, n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, sub_training_size=sts, train_mode=TRAIN_MODE),
-                        shell=True,
-                        cwd='./')
-        proc.wait()
+        cmd = EVAL_COMMAND.format(dataset=DATASET, n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, sub_training_size=sts, train_mode=TRAIN_MODE)
+        print(cmd)
+        subprocess.call(cmd.split())
 
 if 'sub-acc-test' in MODE:
     for nr, ep, sig, sr, lr, c, sts in itertools.product(n_runss, epochss, sigmas, sample_rates, lrs, clips, sub_training_sizes): 
-        print(TRAIN_SUBSET_ACC.format(dataset=DATASET, n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, sub_training_size=sts, train_mode=TRAIN_MODE))
-        proc = Popen(TRAIN_SUBSET_ACC.format(dataset=DATASET, n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, sub_training_size=sts, train_mode=TRAIN_MODE),
-                        shell=True,
-                        cwd='./')
-        proc.wait()
+        cmd = TRAIN_SUBSET_ACC.format(dataset=DATASET, n_runs=nr, epochs=ep, sigma=sig, sample_rate=sr, lr=lr, c=c, model_name=model_name, sub_training_size=sts, train_mode=TRAIN_MODE)
+        print(cmd)
+        subprocess.call(cmd.split())
 
 if 'summary' in MODE:
     summarys = []

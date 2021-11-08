@@ -187,7 +187,7 @@ def certify(method_name):
     certified_poisoning_size_array = np.zeros([num_data], dtype=np.int)
     dp_bagging_rads = []
 
-    for idx in tqdm(range(2, num_data)):
+    for idx in tqdm(range(num_data)):
         # Multinomial or Softmax scores
         if 'softmax' not in method_name:
             CI, ls = confident_interval_multinomial(aggregate_result, idx, method_name, float(args.alpha))
@@ -311,8 +311,8 @@ if __name__ == "__main__":
             # np.save(f"{result_folder}/rdp_softmax_cpsa.npy", certify('rdp_softmax'))
             if args.train_mode == 'Sub-DP':
                 # np.save(f"{result_folder}/dp_bagging_cpsa.npy", certify('dp_bagging'))
-                np.save(f"{result_folder}/dp_bagging_softmax_cpsa.npy", certify('dp_bagging_softmax'))
-                # np.save(f"{result_folder}/dp_bagging_softmax_prob_cpsa.npy", certify('dp_bagging_softmax_prob'))
+                # np.save(f"{result_folder}/dp_bagging_softmax_cpsa.npy", certify('dp_bagging_softmax'))
+                np.save(f"{result_folder}/dp_bagging_softmax_prob_cpsa.npy", certify('dp_bagging_softmax_prob'))
         elif args.train_mode == 'Bagging':
             np.save(f"{result_folder}/bagging_cpsa.npy", certify('bagging'))
 
