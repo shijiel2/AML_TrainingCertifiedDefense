@@ -180,7 +180,8 @@ def check_condition_dp_baseline(args, radius_value, epsilon, delta, p_l_value, p
         return False
 
 
-def rdp_bounds(sample_rate, steps, alpha, sigma, p1, p2, softmax, amplify=False, training_size=None, sub_training_size=None):
+def rdp_bounds(radius, sample_rate, steps, alpha, sigma, p1, p2, softmax, amplify=False, training_size=None, sub_training_size=None):
+    sample_rate = 1 - (1 - sample_rate)**radius
     if not amplify:
         rdp = PrivacyEngine._get_renyi_divergence(
             sample_rate=sample_rate, noise_multiplier=sigma, alphas=[alpha]) * steps
@@ -212,12 +213,10 @@ def check_condition_rdp(args, radius, sample_rate, steps, alpha, delta, sigma, p
     if radius == 0:
         return True
 
-    sample_rate = 1 - (1 - sample_rate)**radius
-
     if args.train_mode == 'DP' or args.train_mode == 'Sub-DP-no-amp':
-        lower, upper = rdp_bounds(sample_rate, steps, alpha, sigma, p1, p2, softmax)
+        lower, upper = rdp_bounds(radius, sample_rate, steps, alpha, sigma, p1, p2, softmax)
     elif args.train_mode == 'Sub-DP':
-        lower, upper = rdp_bounds(sample_rate, steps, alpha, sigma, p1, p2, softmax, amplify=True, training_size=args.training_size, sub_training_size=args.sub_training_size)
+        lower, upper = rdp_bounds(radius, sample_rate, steps, alpha, sigma, p1, p2, softmax, amplify=True, training_size=args.training_size, sub_training_size=args.sub_training_size)
     
     val = lower - upper
     if val > 0:
@@ -291,8 +290,8 @@ def check_condition_dp_bagging_softmax_prob(radius_value, sample_rate, steps, al
     if radius_value == 0:
         return True
 
-    pi_l1_lower, pi_l1_upper = rdp_bounds(sample_rate, steps, alpha, sigma, l1_lower, l1_upper, softmax=True)
-    pi_l2_lower, pi_l2_upper = rdp_bounds(sample_rate, steps, alpha, sigma, l2_lower, l2_upper, softmax=True)
+    pi_l1_lower, pi_l1_upper = rdp_bounds(1, sample_rate, steps, alpha, sigma, l1_lower, l1_upper, softmax=True)
+    pi_l2_lower, pi_l2_upper = rdp_bounds(1, sample_rate, steps, alpha, sigma, l2_lower, l2_upper, softmax=True)
 
     p = 1 - ((n_value-radius_value)/n_value)**k_value
     omega1 = (pi_l1_upper-pi_l1_lower) * p
