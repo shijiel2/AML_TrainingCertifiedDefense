@@ -540,8 +540,6 @@ def CertifyRadiusDPBS_softmax_prob(ls, CI, k, n, delta, steps, sample_rate, sigm
 
 
 
-
-
 def get_dir(train_mode, results_folder, model_name, lr, sigma, max_per_sample_grad_norm, sample_rate, epochs, n_runs, sub_training_size):
     if train_mode == 'DP':
         result_folder = (
