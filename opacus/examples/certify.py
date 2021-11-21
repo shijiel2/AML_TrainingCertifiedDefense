@@ -204,6 +204,10 @@ def certify(method_name):
         elif method_name == 'rdp_softmax':
             rd = CertifyRadiusRDP(args, ls, CI,
                                   rdp_steps, args.sample_rate, args.sigma, softmax=True)
+            # rd, valid_radius = CertifyRadiusRDP_ablation(args, ls, CI,
+            #                       rdp_steps, args.sample_rate, args.sigma, softmax=True)
+            # np.save(f"{result_folder}/rdp_softmax_ablation_valid_radius.npy", valid_radius)
+            # exit()
         elif method_name == 'rdp_gp':
             rd = CertifyRadiusRDP_GP(args, ls, CI,
                                   rdp_steps, args.sample_rate, args.sigma)
@@ -308,11 +312,11 @@ if __name__ == "__main__":
             # np.save(f"{result_folder}/dp_baseline_size_one_cpsa.npy", certify('dp_baseline_size_one'))
             # np.save(f"{result_folder}/best_dp_cpsa.npy", certify('best'))
             # np.save(f"{result_folder}/dp_softmax_cpsa.npy", certify('dp_softmax'))
-            # np.save(f"{result_folder}/rdp_softmax_cpsa.npy", certify('rdp_softmax'))
-            if args.train_mode == 'Sub-DP':
-                # np.save(f"{result_folder}/dp_bagging_cpsa.npy", certify('dp_bagging'))
-                # np.save(f"{result_folder}/dp_bagging_softmax_cpsa.npy", certify('dp_bagging_softmax'))
-                np.save(f"{result_folder}/dp_bagging_softmax_prob_cpsa.npy", certify('dp_bagging_softmax_prob'))
+            np.save(f"{result_folder}/rdp_softmax_cpsa.npy", certify('rdp_softmax'))
+            # if args.train_mode == 'Sub-DP':
+            #     # np.save(f"{result_folder}/dp_bagging_cpsa.npy", certify('dp_bagging'))
+            #     np.save(f"{result_folder}/dp_bagging_softmax_cpsa.npy", certify('dp_bagging_softmax'))
+            #     # np.save(f"{result_folder}/dp_bagging_softmax_prob_cpsa.npy", certify('dp_bagging_softmax_prob'))
         elif args.train_mode == 'Bagging':
             np.save(f"{result_folder}/bagging_cpsa.npy", certify('bagging'))
 
@@ -353,8 +357,8 @@ if __name__ == "__main__":
     # Plot
     elif args.mode == 'plot':
 
-        method_name = ['RDP-softmax', 'RDP', 'DP-Bagging-softmax', 'DP-Bagging', 'Baseline-Bagging']
-        # method_name = ['DP-Bagging', 'RDP', 'DP', 'Baseline-DP', 'Baseline-RDP-GP', 'Baseline-Bagging']
+        method_name = ['RDP', 'RDP-softmax', 'DP-Bagging', 'DP-Bagging-softmax', 'Baseline-Bagging', 'Baseline-DP']
+        # method_name = ['RDP-softmax']
 
         if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
             acc_list = []
@@ -366,6 +370,8 @@ if __name__ == "__main__":
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_cpsa.npy"), radius_range=args.radius_range)
                 elif name == 'RDP-softmax':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_softmax_cpsa.npy"), radius_range=args.radius_range)
+                elif name == 'DP-softmax':
+                    acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/dp_softmax_cpsa.npy"), radius_range=args.radius_range)
                 elif name == 'Baseline-RDP-GP':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_gp_cpsa.npy"), radius_range=args.radius_range)
                 elif name == 'Baseline-DP':
