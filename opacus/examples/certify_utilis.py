@@ -423,7 +423,7 @@ def CertifyRadiusRDP_ablation(args, ls, CI, steps, sample_rate, sigma, softmax=F
     if p1 <= p2:
         return -1
 
-    valid_radius = set()
+    valid_radius = []
     for alpha in [1 + x/10 for x in range(1, 1000)]:
         # for delta in [x / 100.0 for x in range(1, 10)]:
         for delta in [0]:
@@ -438,10 +438,10 @@ def CertifyRadiusRDP_ablation(args, ls, CI, steps, sample_rate, sigma, softmax=F
             radius = math.floor(low)
             if check_condition_rdp(args, radius=radius, sample_rate=sample_rate, steps=steps, alpha=alpha, delta=delta, sigma=sigma, p1=p1, p2=p2, softmax=softmax):
                 lower, upper = rdp_bounds(radius, sample_rate, steps, alpha, sigma, p1, p2, softmax, clip=False)
-                valid_radius.add((radius, alpha, delta, lower, upper))
+                valid_radius.append((radius, alpha, delta, lower, upper))
             elif radius == 0:
                 lower, upper = rdp_bounds(radius, sample_rate, steps, alpha, sigma, p1, p2, softmax, clip=False)
-                valid_radius.add((radius, alpha, delta, lower, upper))
+                valid_radius.append((radius, alpha, delta, lower, upper))
             else:
                 print("error", (radius, alpha, delta))
                 raise ValueError

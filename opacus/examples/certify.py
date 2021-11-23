@@ -333,15 +333,15 @@ if __name__ == "__main__":
         # p1_list, p2_list, rad_list = p1_p2_rad(test_size, aggregate_result, np.load(f"{result_folder}/dp_bagging_cpsa.npy"), method_name, args.alpha)
         # plot_interval(rad_list, p2_list, p1_list, range(test_size), f"{result_folder}/{method_name}_p1_p2_interval.png", ylim=[0,13])
 
-        method_name = 'dp_bagging_softmax'
-        p1_list, p2_list, rad_list = p1_p2_rad(test_size, aggregate_result_softmax, np.load(f"{result_folder}/dp_bagging_softmax_cpsa.npy"), method_name, args.alpha, aggregate_result_rm=np.mean(aggregate_result_softmax, axis=0))
-        plot_interval(rad_list, p2_list, p1_list, range(test_size), f"{result_folder}/{method_name}_p1_p2_interval.png", ylim=[0,13])
+        # method_name = 'dp_bagging_softmax'
+        # p1_list, p2_list, rad_list = p1_p2_rad(test_size, aggregate_result_softmax, np.load(f"{result_folder}/dp_bagging_softmax_cpsa.npy"), method_name, args.alpha, aggregate_result_rm=np.mean(aggregate_result_softmax, axis=0))
+        # plot_interval(rad_list, p2_list, p1_list, range(test_size), f"{result_folder}/{method_name}_p1_p2_interval.png", ylim=[0,13])
 
         # method_name = 'dp'
         # p1_list, p2_list, rad_list = p1_p2_rad(test_size, aggregate_result, [0]*num_data, method_name, args.alpha)
         # plot_interval(rad_list, p2_list, p1_list, range(test_size), f"{result_folder}/{method_name}_p1_p2_norad_interval.png", ylim=[0,1])
 
-        # method_name = 'dp_softmax'
+        # method_name = 'rdp_softmax'
         # p1_list, p2_list, rad_list = p1_p2_rad(test_size, aggregate_result_softmax, [0]*num_data, method_name, args.alpha, aggregate_result_rm=np.mean(aggregate_result_softmax, axis=0))
         # plot_interval(rad_list, p2_list, p1_list, range(test_size), f"{result_folder}/{method_name}_p1_p2_norad_interval.png", ylim=[0,1])
         
@@ -352,6 +352,16 @@ if __name__ == "__main__":
         # method_name = 'dp_softmax'
         # p1_list, p2_list, rad_list = p1_p2_rad(test_size, aggregate_result_softmax, np.load(f"{result_folder}/dp_softmax_cpsa.npy"), method_name, args.alpha, aggregate_result_rm=np.mean(aggregate_result_softmax, axis=0))
         # plot_interval(rad_list, p2_list, p1_list, range(test_size), f"{result_folder}/{method_name}_p1_p2_interval.png")
+
+        valid_radius = np.load(f"{result_folder}/rdp_softmax_ablation_valid_radius.npy")
+        r_list, a_list, l_list, u_list = [], [], [], []
+        for radius, alpha, delta, lower, upper in valid_radius:
+            r_list.append(radius)
+            a_list.append(alpha)
+            l_list.append(lower)
+            u_list.append(upper)
+        plot_interval([0]*len(r_list), u_list, l_list, a_list, f"{result_folder}/rdp_softmax_lower_upper_interval.png")
+        # print(r_list)
         
         
     # Plot
