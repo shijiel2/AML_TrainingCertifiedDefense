@@ -9,7 +9,7 @@ from notification import NOTIFIER
 from datetime import datetime
 
 
-MODE = ['ntrain', 'ncertify', 'nplot', 'ablation', 'neval', 'nsub-acc-test', 'nsummary']
+MODE = ['ntrain', 'certify', 'plot', 'nablation', 'neval', 'nsub-acc-test', 'nsummary']
 DATASET = 'cifar10'
 TRAIN_MODE = 'Sub-DP-no-amp' # DP, Sub-DP, Bagging, Sub-DP-no-amp
 
@@ -100,4 +100,4 @@ if 'summary' in MODE:
             f.write(str(line) + '\n')
 
 
-# NOTIFIER.notify(socket.gethostname(), 'Job Done.')
+NOTIFIER.notify(socket.gethostname(), 'Job Done.')

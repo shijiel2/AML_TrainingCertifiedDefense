@@ -307,16 +307,16 @@ if __name__ == "__main__":
     if args.mode == 'certify':
         if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
             # np.save(f"{result_folder}/dp_cpsa.npy", certify('dp'))
-            # np.save(f"{result_folder}/rdp_cpsa.npy", certify('rdp'))    
+            np.save(f"{result_folder}/rdp_cpsa.npy", certify('rdp'))    
             # np.save(f"{result_folder}/rdp_gp_cpsa.npy", certify('rdp_gp'))  
             # np.save(f"{result_folder}/dp_baseline_size_one_cpsa.npy", certify('dp_baseline_size_one'))
             # np.save(f"{result_folder}/best_dp_cpsa.npy", certify('best'))
             # np.save(f"{result_folder}/dp_softmax_cpsa.npy", certify('dp_softmax'))
-            np.save(f"{result_folder}/rdp_softmax_cpsa.npy", certify('rdp_softmax'))
+            # np.save(f"{result_folder}/rdp_softmax_cpsa.npy", certify('rdp_softmax'))
             # if args.train_mode == 'Sub-DP':
-            #     # np.save(f"{result_folder}/dp_bagging_cpsa.npy", certify('dp_bagging'))
-            #     np.save(f"{result_folder}/dp_bagging_softmax_cpsa.npy", certify('dp_bagging_softmax'))
-            #     # np.save(f"{result_folder}/dp_bagging_softmax_prob_cpsa.npy", certify('dp_bagging_softmax_prob'))
+                # np.save(f"{result_folder}/dp_bagging_cpsa.npy", certify('dp_bagging'))
+                # np.save(f"{result_folder}/dp_bagging_softmax_cpsa.npy", certify('dp_bagging_softmax'))
+                # np.save(f"{result_folder}/dp_bagging_softmax_prob_cpsa.npy", certify('dp_bagging_softmax_prob'))
         elif args.train_mode == 'Bagging':
             np.save(f"{result_folder}/bagging_cpsa.npy", certify('bagging'))
 
@@ -367,8 +367,8 @@ if __name__ == "__main__":
     # Plot
     elif args.mode == 'plot':
 
-        method_name = ['RDP', 'RDP-softmax', 'DP-Bagging', 'DP-Bagging-softmax', 'Baseline-Bagging', 'Baseline-DP']
-        # method_name = ['RDP-softmax']
+        # method_name = ['RDP', 'RDP-softmax', 'DP-Bagging', 'DP-Bagging-softmax', 'Baseline-Bagging', 'Baseline-DP']
+        method_name = ['RDP', 'RDP-softmax', 'Baseline-Bagging']
 
         if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
             acc_list = []

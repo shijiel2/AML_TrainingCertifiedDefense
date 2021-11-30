@@ -195,32 +195,31 @@ def rdp_bounds(radius, sample_rate, steps, alpha, sigma, p1, p2, softmax, amplif
         lower = np.e**(-eps) * p1**(alpha/(alpha-1))
         upper = (np.e**eps * p2)**((alpha-1)/alpha)
     else:
-        aa = (alpha-1)/alpha
-        eea = np.e**(eps*aa)
-        ba = (1/2)**(1/alpha)
-        inv_aa = alpha/(alpha-1)
-        inv_eea = np.e**(-eps*aa)
-        inv_ba = (1/2)**(-1/alpha)
-
-        lower = (inv_eea * inv_ba * p1)**inv_aa
-        upper = eea * ba * (p2)**aa
+        lower = np.e**(-eps) * p1**(alpha/(alpha-1))
+        upper = (np.e**eps * p2)**((alpha-1)/alpha)
 
     if clip:
         return min(max(lower, 0), 1), max(min(upper, 1), 0)
     else:
         return lower, upper
 
-def check_condition_rdp(args, radius, sample_rate, steps, alpha, delta, sigma, p1, p2, softmax):
+def check_condition_rdp(args, radius, sample_rate, steps, sigma, p1, p2, softmax):
 
     if radius == 0:
         return True
 
-    if args.train_mode == 'DP' or args.train_mode == 'Sub-DP-no-amp':
-        lower, upper = rdp_bounds(radius, sample_rate, steps, alpha, sigma, p1, p2, softmax)
-    elif args.train_mode == 'Sub-DP':
-        lower, upper = rdp_bounds(radius, sample_rate, steps, alpha, sigma, p1, p2, softmax, amplify=True, training_size=args.training_size, sub_training_size=args.sub_training_size)
-    
-    val = lower - upper
+    max_lower = 0
+    min_upper = 1
+    for alpha in [1 + x/100 for x in range(1, 1000)]:
+        if args.train_mode == 'DP' or args.train_mode == 'Sub-DP-no-amp':
+            lower, upper = rdp_bounds(radius, sample_rate, steps, alpha, sigma, p1, p2, softmax)
+        elif args.train_mode == 'Sub-DP':
+            lower, upper = rdp_bounds(radius, sample_rate, steps, alpha, sigma, p1, p2, softmax, amplify=True, training_size=args.training_size, sub_training_size=args.sub_training_size)
+        if lower > max_lower:
+            max_lower = lower
+        if upper < min_upper:
+            min_upper = upper
+    val = max_lower - min_upper
     if val > 0:
         return True
     else:
@@ -388,28 +387,25 @@ def CertifyRadiusRDP(args, ls, CI, steps, sample_rate, sigma, softmax=False):
         return -1
 
     valid_radius = set()
-    for alpha in [1 + x/10 for x in range(1, 1000)]:
-        # for delta in [x / 100.0 for x in range(1, 10)]:
-        for delta in [0]:
-            # binary search for radius
-            low, high = 0, 50
-            while low <= high:
-                radius = math.ceil((low + high) / 2.0)
-                if check_condition_rdp(args, radius=radius, sample_rate=sample_rate, steps=steps, alpha=alpha, delta=delta, sigma=sigma, p1=p1, p2=p2, softmax=softmax):
-                    low = radius + 0.1
-                else:
-                    high = radius - 1
-            radius = math.floor(low)
-            if check_condition_rdp(args, radius=radius, sample_rate=sample_rate, steps=steps, alpha=alpha, delta=delta, sigma=sigma, p1=p1, p2=p2, softmax=softmax):
-                valid_radius.add((radius, alpha, delta))
-            elif radius == 0:
-                valid_radius.add((radius, alpha, delta))
-            else:
-                print("error", (radius, alpha, delta))
-                raise ValueError
+    # binary search for radius
+    low, high = 0, 50
+    while low <= high:
+        radius = math.ceil((low + high) / 2.0)
+        if check_condition_rdp(args, radius=radius, sample_rate=sample_rate, steps=steps, sigma=sigma, p1=p1, p2=p2, softmax=softmax):
+            low = radius + 0.1
+        else:
+            high = radius - 1
+    radius = math.floor(low)
+    if check_condition_rdp(args, radius=radius, sample_rate=sample_rate, steps=steps, sigma=sigma, p1=p1, p2=p2, softmax=softmax):
+        valid_radius.add(radius)
+    elif radius == 0:
+        valid_radius.add(radius)
+    else:
+        print("error", radius)
+        raise ValueError
 
     if len(valid_radius) > 0:
-        max_radius = max(valid_radius, key=lambda x: x[0])[0]
+        max_radius = max(valid_radius)
         # for x in valid_radius:
         #     if x[0] == max_radius:
         #         print(x)
