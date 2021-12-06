@@ -180,7 +180,7 @@ def check_condition_dp_baseline(args, radius_value, epsilon, delta, p_l_value, p
         return False
 
 
-def rdp_bounds(radius, sample_rate, steps, alpha, sigma, p1, p2, softmax, amplify=False, training_size=None, sub_training_size=None, clip=True):
+def rdp_bounds(radius, sample_rate, steps, alpha, sigma, p1, p2, softmax, agg_res_param=None, amplify=False, training_size=None, sub_training_size=None, clip=True):
     sample_rate = 1 - (1 - sample_rate)**radius
     if not amplify:
         rdp = PrivacyEngine._get_renyi_divergence(
@@ -195,15 +195,36 @@ def rdp_bounds(radius, sample_rate, steps, alpha, sigma, p1, p2, softmax, amplif
         lower = np.e**(-eps) * p1**(alpha/(alpha-1))
         upper = (np.e**eps * p2)**((alpha-1)/alpha)
     else:
-        lower = np.e**(-eps) * p1**(alpha/(alpha-1))
-        upper = (np.e**eps * p2)**((alpha-1)/alpha)
+        if agg_res_param is not None:
+            agg_res, p1_idx, p2_idx = agg_res_param['agg_res'], agg_res_param['p1_idx'], agg_res_param['p2_idx'] 
+            
+            def moments_bounds(agg_res, order):
+                agg_res_pow = np.power(agg_res, order)
+                return single_ci(agg_res_pow, 1e-5)
+
+            p1_agg_res = agg_res[:, p1_idx]
+            p2_agg_res = agg_res[:, p2_idx]
+            _, l1, _ = moments_bounds(p1_agg_res, (alpha-1)/alpha)    
+            _, _, u2 = moments_bounds(p2_agg_res, alpha/(alpha-1))
+
+            if l1 == 1 or u2 == 0:
+                p1_agg_res = np.longdouble(agg_res[:, p1_idx])
+                p2_agg_res = np.longdouble(agg_res[:, p2_idx])
+                _, l1, _ = moments_bounds(p1_agg_res, (alpha-1)/alpha)    
+                _, _, u2 = moments_bounds(p2_agg_res, alpha/(alpha-1))
+
+            lower = np.e**(-eps) * l1**(alpha/(alpha-1))
+            upper = (np.e**eps * u2)**((alpha-1)/alpha)
+        else:
+            lower = np.e**(-eps) * p1**(alpha/(alpha-1))
+            upper = (np.e**eps * p2)**((alpha-1)/alpha)
 
     if clip:
         return min(max(lower, 0), 1), max(min(upper, 1), 0)
     else:
         return lower, upper
 
-def check_condition_rdp(args, radius, sample_rate, steps, sigma, p1, p2, softmax):
+def check_condition_rdp(args, radius, sample_rate, steps, sigma, p1, p2, softmax, agg_res_param=None):
 
     if radius == 0:
         return True
@@ -212,9 +233,9 @@ def check_condition_rdp(args, radius, sample_rate, steps, sigma, p1, p2, softmax
     min_upper = 1
     for alpha in [1 + x/100 for x in range(1, 1000)]:
         if args.train_mode == 'DP' or args.train_mode == 'Sub-DP-no-amp':
-            lower, upper = rdp_bounds(radius, sample_rate, steps, alpha, sigma, p1, p2, softmax)
+            lower, upper = rdp_bounds(radius, sample_rate, steps, alpha, sigma, p1, p2, softmax, agg_res_param=agg_res_param)
         elif args.train_mode == 'Sub-DP':
-            lower, upper = rdp_bounds(radius, sample_rate, steps, alpha, sigma, p1, p2, softmax, amplify=True, training_size=args.training_size, sub_training_size=args.sub_training_size)
+            lower, upper = rdp_bounds(radius, sample_rate, steps, alpha, sigma, p1, p2, softmax, agg_res_param=agg_res_param, amplify=True, training_size=args.training_size, sub_training_size=args.sub_training_size)
         if lower > max_lower:
             max_lower = lower
         if upper < min_upper:
@@ -414,42 +435,39 @@ def CertifyRadiusRDP(args, ls, CI, steps, sample_rate, sigma, softmax=False):
         return 0
 
 
-def CertifyRadiusRDP_ablation(args, ls, CI, steps, sample_rate, sigma, softmax=False):
+def CertifyRadiusRDP_moments(args, ls, CI, steps, sample_rate, sigma, agg_res, softmax=False):
     p1, p2 = top2_probs(CI, ls)
+    p1_idx, p2_idx = top2_probs(CI, ls, return_index=True)
+    agg_res_param = {'agg_res': agg_res, 'p1_idx': p1_idx, 'p2_idx': p2_idx}
     if p1 <= p2:
         return -1
 
-    valid_radius = []
-    for alpha in [1 + x/10 for x in range(1, 1000)]:
-        # for delta in [x / 100.0 for x in range(1, 10)]:
-        for delta in [0]:
-            # binary search for radius
-            low, high = 0, 50
-            while low <= high:
-                radius = math.ceil((low + high) / 2.0)
-                if check_condition_rdp(args, radius=radius, sample_rate=sample_rate, steps=steps, alpha=alpha, delta=delta, sigma=sigma, p1=p1, p2=p2, softmax=softmax):
-                    low = radius + 0.1
-                else:
-                    high = radius - 1
-            radius = math.floor(low)
-            if check_condition_rdp(args, radius=radius, sample_rate=sample_rate, steps=steps, alpha=alpha, delta=delta, sigma=sigma, p1=p1, p2=p2, softmax=softmax):
-                lower, upper = rdp_bounds(radius, sample_rate, steps, alpha, sigma, p1, p2, softmax, clip=False)
-                valid_radius.append((radius, alpha, delta, lower, upper))
-            elif radius == 0:
-                lower, upper = rdp_bounds(radius, sample_rate, steps, alpha, sigma, p1, p2, softmax, clip=False)
-                valid_radius.append((radius, alpha, delta, lower, upper))
-            else:
-                print("error", (radius, alpha, delta))
-                raise ValueError
+    valid_radius = set()
+    # binary search for radius
+    low, high = 0, 50
+    while low <= high:
+        radius = math.ceil((low + high) / 2.0)
+        if check_condition_rdp(args, radius=radius, sample_rate=sample_rate, steps=steps, sigma=sigma, p1=p1, p2=p2, softmax=softmax, agg_res_param=agg_res_param):
+            low = radius + 0.1
+        else:
+            high = radius - 1
+    radius = math.floor(low)
+    if check_condition_rdp(args, radius=radius, sample_rate=sample_rate, steps=steps, sigma=sigma, p1=p1, p2=p2, softmax=softmax, agg_res_param=agg_res_param):
+        valid_radius.add(radius)
+    elif radius == 0:
+        valid_radius.add(radius)
+    else:
+        print("error", radius)
+        raise ValueError
 
     if len(valid_radius) > 0:
-        max_radius = max(valid_radius, key=lambda x: x[0])[0]
+        max_radius = max(valid_radius)
         # for x in valid_radius:
         #     if x[0] == max_radius:
         #         print(x)
-        return max_radius, valid_radius
+        return max_radius
     else:
-        return 0, valid_radius
+        return 0
 
 
 def CertifyRadiusRDP_GP(args, ls, CI, steps, sample_rate, sigma):
