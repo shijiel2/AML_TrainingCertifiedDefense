@@ -676,3 +676,26 @@ def p1_p2_rad(test_size, aggregate_result, cpsa, method_name, alpha, aggregate_r
         p2_list.append(p2)
     
     return p1_list, p2_list, rad_list
+
+def result_folder_path_generator(args):
+    if args.train_mode == 'DP':
+        result_folder = (
+            f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
+            f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.n_runs}"
+        )
+    elif args.train_mode == 'Bagging':
+        result_folder = (
+            f"{args.results_folder}/Bagging_{args.model_name}_{args.lr}_{args.sub_training_size}_"
+            f"{args.epochs}_{args.n_runs}"
+        )
+    elif args.train_mode == 'Sub-DP':
+        result_folder = (
+            f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
+            f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.sub_training_size}_{args.n_runs}"
+        )
+    elif args.train_mode == 'Sub-DP-no-amp':
+        result_folder = (
+            f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
+            f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.sub_training_size}_{args.n_runs}_no_amp"
+        )
+    return result_folder

@@ -22,6 +22,7 @@ import argparse
 import sys
 sys.path.append("../..")
 from notification import NOTIFIER
+from certify_utilis import result_folder_path_generator
 
 # Precomputed characteristics of the MNIST dataset
 MNIST_MEAN = 0.1307
@@ -104,7 +105,7 @@ def test(args, model, device, test_loader):
     return correct / len(test_loader.dataset)
 
 
-def pred(args, model, device, test_dataset):
+def pred(args, model, test_dataset, device):
     model.eval()
 
     X, y = next(iter(torch.utils.data.DataLoader(
@@ -114,6 +115,16 @@ def pred(args, model, device, test_dataset):
     y_pred = model(X).max(1)[1]
 
     return y_pred
+
+def softmax(args, model, test_dataset, device):
+    model.eval()
+
+    X, y = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))
+    X, y  = X.to(device), y.to(device)
+
+    softmax = nn.Softmax(dim=1)(model(X))
+
+    return softmax
 
 
 def main():
@@ -323,26 +334,7 @@ def main():
         return test_dataset, test_loader
 
     # folder for this experiment
-    if args.train_mode == 'DP':
-        result_folder = (
-            f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
-            f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.n_runs}"
-        )
-    elif args.train_mode == 'Bagging':
-        result_folder = (
-            f"{args.results_folder}/Bagging_{args.model_name}_{args.lr}_{args.sub_training_size}_"
-            f"{args.epochs}_{args.n_runs}"
-        )
-    elif args.train_mode == 'Sub-DP':
-        result_folder = (
-            f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
-            f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.sub_training_size}_{args.n_runs}"
-        )
-    elif args.train_mode == 'Sub-DP-no-amp':
-        result_folder = (
-            f"{args.results_folder}/{args.model_name}_{args.lr}_{args.sigma}_"
-            f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.sub_training_size}_{args.n_runs}_no_amp"
-        )
+    result_folder = result_folder_path_generator(args)
     print(f'Result folder: {result_folder}')
     models_folder = f"{result_folder}/models"
     Path(models_folder).mkdir(parents=True, exist_ok=True)
@@ -355,6 +347,7 @@ def main():
     # collect votes from all models
     test_dataset, test_loader = gen_test_dataset_loader()
     aggregate_result = np.zeros([len(test_dataset), 10 + 1], dtype=np.int)
+    aggregate_result_softmax = np.zeros([args.n_runs, len(test_dataset), 10 + 1], dtype=np.float32)
     acc_list = []
     
     # use this code for "sub_training_size V.S. acc"
@@ -396,8 +389,10 @@ def main():
             for epoch in range(1, args.epochs + 1):
                 train(args, model, device, train_loader, optimizer, epoch)
                 if args.run_test:
+                    logging.info(f'Epoch: {epoch}')
                     test(args, model, device, test_loader)
                 if run_idx == 0:
+                    logging.info(f'Epoch: {epoch}')
                     acc = test(args, model, device, test_loader)
                     if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
                         eps, _ = optimizer.privacy_engine.get_privacy_spent(args.delta)
@@ -426,7 +421,8 @@ def main():
                 np.save(f"{result_folder}/dp_epsilon", dp_epsilon)
         # save preds
         aggregate_result[np.arange(0, len(test_dataset)), pred(
-            args, model, device, test_dataset).cpu()] += 1
+            args, model, test_dataset, device).cpu()] += 1
+        aggregate_result_softmax[run_idx, np.arange(0, len(test_dataset)), 0:10] = softmax(args, model, test_dataset, device).cpu().detach().numpy()
         acc_list.append(test(args, model, device, test_loader))
         # save model
         if not args.load_model and args.save_model:
@@ -435,6 +431,8 @@ def main():
     # finish trining all models, save results
     aggregate_result[np.arange(0, len(test_dataset)), -1] = next(
         iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))[1]
+    aggregate_result_softmax[:, np.arange(0, len(test_dataset)), -1] = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))[1]
+    np.save(f"{result_folder}/aggregate_result_softmax", aggregate_result_softmax)
     np.save(f"{result_folder}/aggregate_result", aggregate_result)
     np.save(f"{result_folder}/acc_list", acc_list)
 
