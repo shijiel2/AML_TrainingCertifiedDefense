@@ -135,7 +135,7 @@ def certified_acc_against_radius(certified_poisoning_size_array, radius_range=50
 
 
 def certified_acc_against_radius_dp_baseline(clean_acc_list, dp_epsilon, dp_delta=1e-5, radius_range=50):
-    _, est_clean_acc, _ = single_ci(clean_acc_list, args.alpha)
+    _, est_clean_acc, _, _ = single_ci(clean_acc_list, args.alpha)
     # est_clean_acc = sum(clean_acc_list) / len(clean_acc_list)
     c_bound = 1
     def dp_baseline_certified_acc(k):
@@ -187,12 +187,16 @@ def certify(method_name):
     certified_poisoning_size_array = np.zeros([num_data], dtype=np.int)
     dp_bagging_rads = []
 
+    if 'softmax' in method_name:
+        import pickle
+        mgf_diff_list = pickle.load(open('../results/mgf_diff_list.p', 'rb'))
+
     for idx in tqdm(range(num_data)):
         # Multinomial or Softmax scores
         if 'softmax' not in method_name:
             CI, ls = confident_interval_multinomial(aggregate_result, idx, method_name, float(args.alpha))
         else:
-            CI, ls = confident_interval_softmax(aggregate_result_softmax, aggregate_result_softmax_rm, idx, method_name, float(args.alpha))
+            CI, ls, varis = confident_interval_softmax(aggregate_result_softmax, aggregate_result_softmax_rm, idx, method_name, float(args.alpha))
 
         if method_name == 'dp' or method_name == 'dp_softmax':
             rd = CertifyRadiusDP(args, ls, CI, dp_epsilon, 1e-5)
@@ -206,7 +210,7 @@ def certify(method_name):
                                   rdp_steps, args.sample_rate, args.sigma, softmax=True)
         elif method_name == 'rdp_softmax_moments':
             rd = CertifyRadiusRDP_moments(args, ls, CI,
-                                  rdp_steps, args.sample_rate, args.sigma, aggregate_result_softmax[:, idx, :-1], softmax=True)
+                                  rdp_steps, args.sample_rate, args.sigma, mgf_diff_list, varis, softmax=True)
         elif method_name == 'rdp_gp':
             rd = CertifyRadiusRDP_GP(args, ls, CI,
                                   rdp_steps, args.sample_rate, args.sigma)
@@ -285,17 +289,16 @@ if __name__ == "__main__":
     if args.mode == 'certify':
         if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
             # np.save(f"{result_folder}/dp_cpsa.npy", certify('dp'))
-            np.save(f"{result_folder}/rdp_cpsa.npy", certify('rdp'))    
+            # np.save(f"{result_folder}/rdp_cpsa.npy", certify('rdp'))    
             # np.save(f"{result_folder}/rdp_gp_cpsa.npy", certify('rdp_gp'))  
             # np.save(f"{result_folder}/dp_baseline_size_one_cpsa.npy", certify('dp_baseline_size_one'))
             # np.save(f"{result_folder}/best_dp_cpsa.npy", certify('best'))
             # np.save(f"{result_folder}/dp_softmax_cpsa.npy", certify('dp_softmax'))
             # np.save(f"{result_folder}/rdp_softmax_cpsa.npy", certify('rdp_softmax'))
-            # np.save(f"{result_folder}/rdp_softmax_moments_cpsa.npy", certify('rdp_softmax_moments'))
+            np.save(f"{result_folder}/rdp_softmax_moments_cpsa.npy", certify('rdp_softmax_moments'))
             # if args.train_mode == 'Sub-DP':
-                # np.save(f"{result_folder}/dp_bagging_cpsa.npy", certify('dp_bagging'))
-                # np.save(f"{result_folder}/dp_bagging_softmax_cpsa.npy", certify('dp_bagging_softmax'))
-                # np.save(f"{result_folder}/dp_bagging_softmax_prob_cpsa.npy", certify('dp_bagging_softmax_prob'))
+            #     np.save(f"{result_folder}/dp_bagging_cpsa.npy", certify('dp_bagging'))
+            #     np.save(f"{result_folder}/dp_bagging_softmax_cpsa.npy", certify('dp_bagging_softmax'))
         elif args.train_mode == 'Bagging':
             np.save(f"{result_folder}/bagging_cpsa.npy", certify('bagging'))
 
@@ -347,8 +350,8 @@ if __name__ == "__main__":
     elif args.mode == 'plot':
 
         # method_name = ['RDP', 'RDP-softmax', 'DP-Bagging', 'DP-Bagging-softmax', 'Baseline-Bagging', 'Baseline-DP']
-        # method_name = ['RDP', 'RDP-softmax', 'RDP-softmax-moments', 'Baseline-Bagging']
-        method_name = ['RDP']
+        method_name = ['RDP', 'RDP-softmax', 'RDP-softmax-moments', 'Baseline-Bagging']
+        # method_name = ['RDP', 'RDP-large-alpha', 'Baseline-Bagging', 'Baseline-DP']
 
         if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
             acc_list = []
@@ -382,7 +385,7 @@ if __name__ == "__main__":
                     print('Invalid method name in Plot.')
                 acc_list.append(acc)
                 rad_list.append(rad)
-            plot_certified_acc(acc_list, rad_list, method_name, f"{result_folder}/rdp_softmax_compare_certified_acc_plot.png")
+            plot_certified_acc(acc_list, rad_list, method_name, f"{result_folder}/rdp_softmax_compare_certified_acc_plot_gd_search.png")
 
             # sub_range = [60000, 30000, 20000]
             # cpsa_dp_list = []

@@ -152,37 +152,40 @@ def test(args, model, test_loader, device):
     return top1_avg
 
 
-def pred(args, model, test_dataset, device):
+def pred(args, model, test_loader, device):
+    model.eval()
+    preds_list = []
+    with torch.no_grad():
+        for images, _ in tqdm(test_loader):
+            images = images.to(device)
+            output = model(images)
+            preds = np.argmax(output.detach().cpu().numpy(), axis=1)
+            preds_list.extend(preds)
+    return preds_list
+
     # model.eval()
-    # preds_list = []
-    # with torch.no_grad():
-    #     for images, _ in tqdm(test_loader):
-    #         images = images.to(device)
-    #         output = model(images)
-    #         preds = np.argmax(output.detach().cpu().numpy(), axis=1)
-    #         preds_list.extend(preds)
+    # X, y = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))
+    # X, y  = X.to(device), y.to(device)
+    # y_pred = model(X).max(1)[1]
+    # return y_pred
 
-    # return preds_list
 
+def softmax(args, model, test_loader, device):
     model.eval()
-
-    X, y = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))
-    X, y  = X.to(device), y.to(device)
-
-    y_pred = model(X).max(1)[1]
-
-    return y_pred
-
-
-def softmax(args, model, test_dataset, device):
-    model.eval()
-
-    X, y = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))
-    X, y  = X.to(device), y.to(device)
-
-    softmax = nn.Softmax(dim=1)(model(X))
-
-    return softmax
+    softmax_list = []
+    with torch.no_grad():
+        for images, _ in tqdm(test_loader):
+            images = images.to(device)
+            output = model(images)
+            softmax = nn.Softmax(dim=1)(output.detach().cpu().numpy())
+            softmax_list.extend(softmax)
+    return softmax_list
+    
+    # model.eval()
+    # X, y = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))
+    # X, y  = X.to(device), y.to(device)
+    # softmax = nn.Softmax(dim=1)(model(X))
+    # return softmax
 
 
 # flake8: noqa: C901
@@ -478,14 +481,14 @@ def main():
         return dataset
 
     def gen_train_dataset_loader(or_sub_training_size=None):
-        train_transform = transforms.Compose(augmentations + normalize if args.train_mode == 'Bagging' else normalize)
+        train_transform = transforms.Compose(normalize)
         train_dataset = CIFAR10(
             root=args.data_root, train=True, download=True, transform=train_transform
         )
 
         sub_training_size = args.sub_training_size if or_sub_training_size is None else or_sub_training_size
 
-        if args.train_mode == 'Bagging' or args.train_mode == 'Sub-DP':
+        if args.train_mode == 'Sub-DP':
             train_dataset = gen_sub_dataset(train_dataset, sub_training_size, True)
         
         if args.train_mode == 'DP' or args.train_mode == 'Sub-DP':
@@ -499,7 +502,7 @@ def main():
                     generator=generator,
                 ),
             )
-        elif args.train_mode == 'Sub-DP-no-amp':
+        elif args.train_mode == 'Bagging' or args.train_mode == 'Sub-DP-no-amp':
             train_loader = torch.utils.data.DataLoader(
                 train_dataset,
                 num_workers=args.workers,
@@ -647,8 +650,8 @@ def main():
                 np.save(f"{result_folder}/dp_epsilon", dp_epsilon)
         
         # save preds and model
-        aggregate_result[np.arange(0, len(test_dataset)), pred(args, model, test_dataset, device).cpu()] += 1
-        aggregate_result_softmax[run_idx, np.arange(0, len(test_dataset)), 0:10] = softmax(args, model, test_dataset, device).cpu().detach().numpy()
+        aggregate_result[np.arange(0, len(test_dataset)), pred(args, model, test_loader, device).cpu()] += 1
+        aggregate_result_softmax[run_idx, np.arange(0, len(test_dataset)), 0:10] = softmax(args, model, test_loader, device).cpu().detach().numpy()
         acc_list.append(test(args, model, test_loader, device))
         if not args.load_model and args.save_model:
             torch.save(model.state_dict(), f"{models_folder}/model_{run_idx}.pt")

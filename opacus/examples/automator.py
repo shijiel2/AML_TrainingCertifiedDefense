@@ -9,7 +9,7 @@ from notification import NOTIFIER
 from datetime import datetime
 
 
-MODE = ['ntrain', 'certify', 'plot', 'nablation', 'neval', 'nsub-acc-test', 'nsummary']
+MODE = ['train', 'ncertify', 'nplot', 'nablation', 'neval', 'nsub-acc-test', 'summary']
 DATASET = 'cifar10'
 TRAIN_MODE = 'Sub-DP-no-amp' # DP, Sub-DP, Bagging, Sub-DP-no-amp
 
@@ -36,15 +36,15 @@ if DATASET == 'mnist':
 
 elif DATASET == 'cifar10':
     results_folder = '../results/cifar10'
-    model_name = 'ConvNet'
+    model_name = 'ResNet18'
     training_size = 50000
-    n_runss = [1000]
-    epochss = [90]
-    sigmas = [2.0] # sigmas = [1.0, 1.5, 2.0]
-    sample_rates = [1024/100000] # sample_rates = [512/10000, 1024/10000]
+    n_runss = [1]
+    epochss = [1]
+    sigmas = [0.05, 0.1, 0.2, 0.3, 0.4] # sigmas = [1.0, 1.5, 2.0]
+    sample_rates = [64/50000] # sample_rates = [512/10000, 1024/10000]
     lrs = [0.01] # lrs = [0.01, 0.05, 0.1]
-    clips = [20.0] # clips = [20.0, 25.0, 30.0]
-    sub_training_sizes = [10000]
+    clips = [10.0, 15.0, 20.0, 25.0, 30.0] # clips = [20.0, 25.0, 30.0]
+    sub_training_sizes = [5000]
     
 
 if 'train' in MODE:

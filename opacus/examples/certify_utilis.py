@@ -32,7 +32,7 @@ def single_ci(counts, alpha):
     n = len(a)
     m, se = np.mean(a), scipy.stats.sem(a)
     h = se * scipy.stats.t.ppf((1 + (1 - alpha)) / 2., n-1)
-    return m, m-h, m+h
+    return m, m-h, m+h, se*np.sqrt(n)
 
 
 def multi_ci_bagging(counts, alpha):
@@ -54,11 +54,13 @@ def multi_ci_softmax_hoeffding(dist, n_runs, alpha):
 
 def multi_ci_softmax_normal(dist, alpha):
     multi_list = []
+    sigma_list = []
     for i in range(dist.shape[1]):
         single_dist = dist[:, i]
-        m, l, u = single_ci(single_dist, alpha)
+        m, l, u, sigma = single_ci(single_dist, alpha)
         multi_list.append([l, u])
-    return np.array(multi_list)
+        sigma_list.append(sigma)
+    return np.array(multi_list), np.array(sigma_list)
 
 
 def dp_amplify(epsilon, delta, m, n):
@@ -196,25 +198,37 @@ def rdp_bounds(radius, sample_rate, steps, alpha, sigma, p1, p2, softmax, agg_re
         upper = (np.e**eps * p2)**((alpha-1)/alpha)
     else:
         if agg_res_param is not None:
-            agg_res, p1_idx, p2_idx = agg_res_param['agg_res'], agg_res_param['p1_idx'], agg_res_param['p2_idx'] 
+            mgf_diff_list, varis_p1, varis_p2 = agg_res_param['mgf_diff_list'], agg_res_param['varis_p1_p2'][0], agg_res_param['varis_p1_p2'][1]
             
-            def moments_bounds(agg_res, order):
-                agg_res_pow = np.power(agg_res, order)
-                return single_ci(agg_res_pow, 1e-5)
+            def moments(order, mean, varis):
+                from sympy import symbols
+                t, mu, sigma = symbols('t, mu, sigma')
+                return mgf_diff_list[order].evalf(subs={t: 0, mu: mean, sigma: varis})
+            
+            a1a = (alpha-1)/alpha
+            aa1 =  round(alpha/(alpha-1))
+            upper_moments = moments(aa1, p2, varis_p2)
+            upper = np.e**(eps*a1a)*upper_moments**a1a
+            lower = np.e**(-eps) * p1**aa1
 
-            p1_agg_res = agg_res[:, p1_idx]
-            p2_agg_res = agg_res[:, p2_idx]
-            _, l1, _ = moments_bounds(p1_agg_res, (alpha-1)/alpha)    
-            _, _, u2 = moments_bounds(p2_agg_res, alpha/(alpha-1))
+            
+            # def moments_bounds(agg_res, order):
+            #     agg_res_pow = np.power(agg_res, order)
+            #     return single_ci(agg_res_pow, 1e-5)
 
-            if l1 == 1 or u2 == 0:
-                p1_agg_res = np.longdouble(agg_res[:, p1_idx])
-                p2_agg_res = np.longdouble(agg_res[:, p2_idx])
-                _, l1, _ = moments_bounds(p1_agg_res, (alpha-1)/alpha)    
-                _, _, u2 = moments_bounds(p2_agg_res, alpha/(alpha-1))
+            # p1_agg_res = agg_res[:, p1_idx]
+            # p2_agg_res = agg_res[:, p2_idx]
+            # _, l1, _ = moments_bounds(p1_agg_res, (alpha-1)/alpha)    
+            # _, _, u2 = moments_bounds(p2_agg_res, alpha/(alpha-1))
 
-            lower = np.e**(-eps) * l1**(alpha/(alpha-1))
-            upper = (np.e**eps * u2)**((alpha-1)/alpha)
+            # if l1 == 1 or u2 == 0:
+            #     p1_agg_res = np.longdouble(agg_res[:, p1_idx])
+            #     p2_agg_res = np.longdouble(agg_res[:, p2_idx])
+            #     _, l1, _ = moments_bounds(p1_agg_res, (alpha-1)/alpha)    
+            #     _, _, u2 = moments_bounds(p2_agg_res, alpha/(alpha-1))
+
+            # lower = np.e**(-eps) * l1**(alpha/(alpha-1))
+            # upper = (np.e**eps * u2)**((alpha-1)/alpha)
         else:
             lower = np.e**(-eps) * p1**(alpha/(alpha-1))
             upper = (np.e**eps * p2)**((alpha-1)/alpha)
@@ -224,7 +238,7 @@ def rdp_bounds(radius, sample_rate, steps, alpha, sigma, p1, p2, softmax, agg_re
     else:
         return lower, upper
 
-def check_condition_rdp(args, radius, sample_rate, steps, sigma, p1, p2, softmax, agg_res_param=None):
+def check_condition_rdp_deprecated(args, radius, sample_rate, steps, sigma, p1, p2, softmax, agg_res_param=None):
 
     if radius == 0:
         return True
@@ -246,6 +260,70 @@ def check_condition_rdp(args, radius, sample_rate, steps, sigma, p1, p2, softmax
     else:
         return False
 
+def is_integer(n):
+    try:
+        float(n)
+    except ValueError:
+        return False
+    else:
+        return float(n).is_integer()
+
+def check_condition_rdp(args, radius, sample_rate, steps, sigma, p1, p2, softmax, agg_res_param=None):
+    if radius == 0:
+        return True
+
+    def bounds(alpha):
+        if args.train_mode == 'DP' or args.train_mode == 'Sub-DP-no-amp':
+            lower, upper = rdp_bounds(radius, sample_rate, steps, alpha, sigma, p1, p2, softmax, agg_res_param=agg_res_param)
+        elif args.train_mode == 'Sub-DP':
+            lower, upper = rdp_bounds(radius, sample_rate, steps, alpha, sigma, p1, p2, softmax, agg_res_param=agg_res_param, amplify=True, training_size=args.training_size, sub_training_size=args.sub_training_size)
+        return lower, upper
+    
+    # alphas, uppers, lowers = [], [], []
+    
+    if agg_res_param is not None:
+        alpha_range = [1 + x/100 for x in range(1, 1001)]
+    else:
+        # need to make sure alpha/(alpha-1) is integer
+        aa1_range = list(range(2, 1002))
+        alpha_range = [x/(x-1) for x in aa1_range].sort()
+
+    max_lower, min_upper = bounds(alpha_range[0])
+    upper_stop, lower_stop = False, False
+    for alpha in alpha_range[1:]:
+        lower, upper = bounds(alpha)
+        # stop condition for upper and lower bounds, as they may occur in different alpha
+        if lower <= max_lower:
+            lower_stop = True
+        if  upper >= min_upper:
+            upper_stop = True
+            # if min_upper is 1, no matter what max_lower is the val should always < 1.
+            if min_upper == 1:
+                break
+        if lower_stop and upper_stop:
+            break
+        # update min/max if we find better bounds
+        if lower > max_lower:
+            max_lower = lower
+        if upper < min_upper:
+            min_upper = upper
+
+        # alphas.append(alpha)
+        # uppers.append(upper)
+        # lowers.append(lower)
+    # import matplotlib.pyplot as plt
+    # plt.plot(alphas, list(map(lambda x: x*100, lowers)))
+    # plt.savefig("alpha_bounds_test1.png", bbox_inches='tight')
+    # plt.clf()
+    # plt.plot(alphas, list(map(lambda x: x*100, uppers)))
+    # plt.savefig("alpha_bounds_test2.png", bbox_inches='tight')
+    # plt.clf()
+        
+    val = max_lower - min_upper
+    if val > 0:
+        return True
+    else:
+        return False
 
 def check_condition_rdp_gp(args, radius, sample_rate, steps, alpha, delta, sigma, p1, p2):
 
@@ -435,10 +513,11 @@ def CertifyRadiusRDP(args, ls, CI, steps, sample_rate, sigma, softmax=False):
         return 0
 
 
-def CertifyRadiusRDP_moments(args, ls, CI, steps, sample_rate, sigma, agg_res, softmax=False):
+def CertifyRadiusRDP_moments(args, ls, CI, steps, sample_rate, sigma, mgf_diff_list, varis, softmax=False):
     p1, p2 = top2_probs(CI, ls)
     p1_idx, p2_idx = top2_probs(CI, ls, return_index=True)
-    agg_res_param = {'agg_res': agg_res, 'p1_idx': p1_idx, 'p2_idx': p2_idx}
+    varis_p1_p2 = (varis[p1_idx], varis[p2_idx])
+    agg_res_param = {'p1_idx': p1_idx, 'p2_idx': p2_idx, 'mgf_diff_list': mgf_diff_list, 'varis_p1_p2': varis_p1_p2}
     if p1 <= p2:
         return -1
 
@@ -656,8 +735,8 @@ def confident_interval_softmax(aggregate_result_softmax, aggregate_result_softma
     if 'softmax' in method_name:
         ls = int(aggregate_result_softmax_rm[idx][-1])
         # CI = multi_ci_softmax_hoeffding(aggregate_result_softmax_rm[idx][:-1], aggregate_result_softmax.shape[0], alpha)
-        CI = multi_ci_softmax_normal(aggregate_result_softmax[:, idx, :-1], alpha)
-    return CI, ls
+        CI, sigmas = multi_ci_softmax_normal(aggregate_result_softmax[:, idx, :-1], alpha)
+    return CI, ls, sigmas
 
 
 def top2_probs(CI, ls, return_index=False):
@@ -679,21 +758,21 @@ def top2_probs(CI, ls, return_index=False):
         return ls, np.argmax(probability_bar)
 
 
-def p1_p2_rad(test_size, aggregate_result, cpsa, method_name, alpha, aggregate_result_rm=None):
+# def p1_p2_rad(test_size, aggregate_result, cpsa, method_name, alpha, aggregate_result_rm=None):
 
-    rad_list = cpsa[:test_size]
+#     rad_list = cpsa[:test_size]
     
-    p1_list, p2_list = [], []
-    for idx in range(test_size):
-        if 'softmax' not in method_name:
-            CI, ls = confident_interval_multinomial(aggregate_result, idx, 'dp', alpha)
-        else:
-            CI, ls = confident_interval_softmax(aggregate_result, aggregate_result_rm, idx, method_name, alpha)
-        p1, p2 = top2_probs(CI, ls)
-        p1_list.append(p1)
-        p2_list.append(p2)
+#     p1_list, p2_list = [], []
+#     for idx in range(test_size):
+#         if 'softmax' not in method_name:
+#             CI, ls = confident_interval_multinomial(aggregate_result, idx, 'dp', alpha)
+#         else:
+#             CI, ls = confident_interval_softmax(aggregate_result, aggregate_result_rm, idx, method_name, alpha)
+#         p1, p2 = top2_probs(CI, ls)
+#         p1_list.append(p1)
+#         p2_list.append(p2)
     
-    return p1_list, p2_list, rad_list
+#     return p1_list, p2_list, rad_list
 
 def result_folder_path_generator(args):
     if args.train_mode == 'DP':

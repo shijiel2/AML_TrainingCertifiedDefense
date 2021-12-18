@@ -41,7 +41,6 @@ class FixedSizedUniformWithReplacementSampler(Sampler):
     def __iter__(self):
         # num_batches = int(1 / self.sample_rate)
         num_batches = int(self.train_size / (self.num_samples * self.sample_rate))
-        print(num_batches)
         while num_batches > 0:
             mask = (
                 torch.rand(self.num_samples, generator=self.generator)
