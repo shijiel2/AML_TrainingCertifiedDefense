@@ -9,9 +9,9 @@ from notification import NOTIFIER
 from datetime import datetime
 
 
-MODE = ['train', 'ncertify', 'nplot', 'nablation', 'neval', 'nsub-acc-test', 'summary']
+MODE = ['train', 'certify', 'nplot', 'nablation', 'neval', 'nsub-acc-test', 'nsummary']
 DATASET = 'cifar10'
-TRAIN_MODE = 'Sub-DP-no-amp' # DP, Sub-DP, Bagging, Sub-DP-no-amp
+TRAIN_MODE = 'Bagging' # DP, Sub-DP, Bagging, Sub-DP-no-amp
 
 
 TRAIN_COMMAND = 'python {dataset}.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr} -c {c} --model-name {model_name} --sub-training-size {sub_training_size} --train-mode {train_mode} --save-model' # --save-model
@@ -38,13 +38,13 @@ elif DATASET == 'cifar10':
     results_folder = '../results/cifar10'
     model_name = 'ResNet18'
     training_size = 50000
-    n_runss = [1]
-    epochss = [1]
-    sigmas = [0.05, 0.1, 0.2, 0.3, 0.4] # sigmas = [1.0, 1.5, 2.0]
-    sample_rates = [64/50000] # sample_rates = [512/10000, 1024/10000]
+    n_runss = [1000]
+    epochss = [100]
+    sigmas = [0.5] # sigmas = [1.0, 1.5, 2.0]
+    sample_rates = [100/50000] # sample_rates = [512/10000, 1024/10000]
     lrs = [0.01] # lrs = [0.01, 0.05, 0.1]
-    clips = [10.0, 15.0, 20.0, 25.0, 30.0] # clips = [20.0, 25.0, 30.0]
-    sub_training_sizes = [5000]
+    clips = [10.0] # clips = [34 for sigma=1]
+    sub_training_sizes = [1000]
     
 
 if 'train' in MODE:

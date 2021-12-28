@@ -20,6 +20,7 @@ import torch.utils.data
 import torch.utils.data.distributed
 import torch.utils.tensorboard as tensorboard
 import torchvision.transforms as transforms
+import torchvision.models as models
 from opacus import PrivacyEngine
 from opacus.layers import DifferentiallyPrivateDistributedDataParallel as DPDDP
 from opacus.utils import stats
@@ -27,8 +28,9 @@ from opacus.utils.uniform_sampler import UniformWithReplacementSampler, FixedSiz
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torchvision.datasets import CIFAR10
 from tqdm import tqdm
-from models import ResNet18
+# from models import ResNet18
 from certify_utilis import result_folder_path_generator
+from opacus.utils import module_modification
 
 
 def setup():
@@ -161,7 +163,7 @@ def pred(args, model, test_loader, device):
             output = model(images)
             preds = np.argmax(output.detach().cpu().numpy(), axis=1)
             preds_list.extend(preds)
-    return preds_list
+    return np.array(preds_list)
 
     # model.eval()
     # X, y = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))
@@ -177,9 +179,9 @@ def softmax(args, model, test_loader, device):
         for images, _ in tqdm(test_loader):
             images = images.to(device)
             output = model(images)
-            softmax = nn.Softmax(dim=1)(output.detach().cpu().numpy())
+            softmax = nn.Softmax(dim=1)(output).detach().cpu().numpy()
             softmax_list.extend(softmax)
-    return softmax_list
+    return np.array(softmax_list)
     
     # model.eval()
     # X, y = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))
@@ -488,7 +490,7 @@ def main():
 
         sub_training_size = args.sub_training_size if or_sub_training_size is None else or_sub_training_size
 
-        if args.train_mode == 'Sub-DP':
+        if args.train_mode == 'Sub-DP' or args.train_mode == 'Bagging':
             train_dataset = gen_sub_dataset(train_dataset, sub_training_size, True)
         
         if args.train_mode == 'DP' or args.train_mode == 'Sub-DP':
@@ -502,7 +504,7 @@ def main():
                     generator=generator,
                 ),
             )
-        elif args.train_mode == 'Bagging' or args.train_mode == 'Sub-DP-no-amp':
+        elif args.train_mode == 'Sub-DP-no-amp':
             train_loader = torch.utils.data.DataLoader(
                 train_dataset,
                 num_workers=args.workers,
@@ -520,7 +522,7 @@ def main():
                 train_dataset,
                 num_workers=args.workers,
                 generator=generator,
-                batch_size=128,
+                batch_size=100,
                 shuffle=True,
             )
         return train_dataset, train_loader
@@ -562,7 +564,7 @@ def main():
         if args.model_name == 'ConvNet':
             model = convnet(num_classes=10).to(device)
         elif args.model_name == 'ResNet18':
-            model = ResNet18(num_classes=10).to(device)
+            model = module_modification.convert_batchnorm_modules(models.resnet18(pretrained=False, num_classes=10)).to(device)
         else:
             exit(f'Model name {args.model_name} invaild.')
         if distributed:
@@ -587,18 +589,16 @@ def main():
             raise NotImplementedError("Optimizer not recognized. Please check spelling")
 
         # Define the DP engine
-        if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
-            privacy_engine = PrivacyEngine(
-                model,
-                sample_rate=args.sample_rate * args.n_accumulation_steps,
-                alphas=[1 + x / 10.0 for x in range(1, 100)] + list(range(12, 64)),
-                noise_multiplier=args.sigma,
-                max_grad_norm=args.max_per_sample_grad_norm,
-                secure_rng=args.secure_rng,
-                **clipping,
-            )
-            privacy_engine.attach(optimizer)
-        
+        privacy_engine = PrivacyEngine(
+            model,
+            sample_rate=args.sample_rate * args.n_accumulation_steps,
+            alphas=[1 + x / 10.0 for x in range(1, 100)],
+            noise_multiplier= 0.0 if args.train_mode == 'Bagging' else args.sigma,
+            max_grad_norm=args.max_per_sample_grad_norm,
+            secure_rng=args.secure_rng,
+            **clipping,
+        )
+        privacy_engine.attach(optimizer)
         # Training and testing
         if args.load_model:
             model.load_state_dict(torch.load(f"{models_folder}/model_{run_idx}.pt"))
@@ -650,8 +650,8 @@ def main():
                 np.save(f"{result_folder}/dp_epsilon", dp_epsilon)
         
         # save preds and model
-        aggregate_result[np.arange(0, len(test_dataset)), pred(args, model, test_loader, device).cpu()] += 1
-        aggregate_result_softmax[run_idx, np.arange(0, len(test_dataset)), 0:10] = softmax(args, model, test_loader, device).cpu().detach().numpy()
+        aggregate_result[np.arange(0, len(test_dataset)), pred(args, model, test_loader, device)] += 1
+        aggregate_result_softmax[run_idx, np.arange(0, len(test_dataset)), 0:10] = softmax(args, model, test_loader, device)
         acc_list.append(test(args, model, test_loader, device))
         if not args.load_model and args.save_model:
             torch.save(model.state_dict(), f"{models_folder}/model_{run_idx}.pt")
