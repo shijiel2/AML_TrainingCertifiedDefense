@@ -600,8 +600,9 @@ def main():
         )
         privacy_engine.attach(optimizer)
         # Training and testing
-        if args.load_model:
-            model.load_state_dict(torch.load(f"{models_folder}/model_{run_idx}.pt"))
+        model_pt_file = f"{models_folder}/model_{run_idx}.pt"
+        if os.path.isfile(model_pt_file) or args.load_model:
+            model.load_state_dict(torch.load(model_pt_file))
         else:
             # use this code for "sub_training_size V.S. acc"
             if args.sub_acc_test:
@@ -654,7 +655,7 @@ def main():
         aggregate_result_softmax[run_idx, np.arange(0, len(test_dataset)), 0:10] = softmax(args, model, test_loader, device)
         acc_list.append(test(args, model, test_loader, device))
         if not args.load_model and args.save_model:
-            torch.save(model.state_dict(), f"{models_folder}/model_{run_idx}.pt")
+            torch.save(model.state_dict(), model_pt_file)
 
     # Finish trining all models, save results
     aggregate_result[np.arange(0, len(test_dataset)), -1] = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))))[1]
