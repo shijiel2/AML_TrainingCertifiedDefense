@@ -362,16 +362,16 @@ def main():
             logging.warn(f"Model name {args.model_name} invaild.")
             exit()
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0)
-        if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
-            privacy_engine = PrivacyEngine(
-                model,
-                sample_rate=args.sample_rate,
-                alphas=[
-                    1 + x / 10.0 for x in range(1, 100)] + list(range(12, 1500)),
-                noise_multiplier=args.sigma,
-                max_grad_norm=args.max_per_sample_grad_norm,
-            )
-            privacy_engine.attach(optimizer)
+        
+        privacy_engine = PrivacyEngine(
+            model,
+            sample_rate=args.sample_rate,
+            alphas=[
+                1 + x / 10.0 for x in range(1, 100)] + list(range(12, 1500)),
+            noise_multiplier=args.sigma,
+            max_grad_norm=args.max_per_sample_grad_norm,
+        )
+        privacy_engine.attach(optimizer)
 
         # training
         if args.load_model:
