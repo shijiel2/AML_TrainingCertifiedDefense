@@ -281,7 +281,7 @@ def check_condition_rdp(args, radius, sample_rate, steps, sigma, p1, p2, softmax
     
     # alphas, uppers, lowers = [], [], []
     
-    if agg_res_param is not None:
+    if agg_res_param is None:
         alpha_range = [1 + x/100 for x in range(1, 1001)]
     else:
         # need to make sure alpha/(alpha-1) is integer
