@@ -274,7 +274,7 @@ def main():
     parser.add_argument(
         "--results-folder",
         type=str,
-        default="../results/mnist",
+        default="../results/fashion_mnist",
         help="Where MNIST results is/will be stored",
     )
     parser.add_argument(
@@ -318,7 +318,7 @@ def main():
         return dataset
 
     def gen_train_dataset_loader(or_sub_training_size=None):
-        train_dataset = datasets.MNIST(
+        train_dataset = datasets.FashionMNIST(
             args.data_root,
             train=True,
             download=True,
@@ -369,7 +369,7 @@ def main():
         return train_dataset, train_loader
 
     def gen_test_dataset_loader():
-        test_dataset = datasets.MNIST(
+        test_dataset = datasets.FashionMNIST(
             args.data_root,
             train=False,
             download=True,

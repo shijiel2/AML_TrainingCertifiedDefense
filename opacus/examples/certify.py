@@ -106,7 +106,7 @@ parser.add_argument(
 parser.add_argument(
     "--radius-range",
     type=int,
-    default=20,
+    default=200,
     help="Size of training set",
 )
 parser.add_argument(
@@ -150,7 +150,7 @@ def certified_acc_against_radius_dp_baseline(clean_acc_list, dp_epsilon, dp_delt
     return certified_acc_list, certified_radius_list
 
 
-def plot_certified_acc(c_acc_lists, c_rad_lists, name_list, plot_path, xlabel='Number of poisoned training examples', ylabel='Certified Accuracy'):
+def plot_certified_acc(c_acc_lists, c_rad_lists, name_list, plot_path, xlabel='Radius', ylabel='Certified Accuracy'):
     print(plot_path)
     for c_acc_list, c_rad_list, name in zip(c_acc_lists, c_rad_lists, name_list):
         logging.info(f'(Rad, Acc):{list(zip(c_rad_list, c_acc_list))}')
@@ -264,7 +264,10 @@ if __name__ == "__main__":
 
     # laod data
     aggregate_result = np.load(f"{result_folder}/aggregate_result.npy")
-    aggregate_result_softmax = np.load(f"{result_folder}/aggregate_result_softmax.npy")
+    try:
+        aggregate_result_softmax = np.load(f"{result_folder}/aggregate_result_softmax.npy")
+    except:
+        aggregate_result_softmax = None
 
     num_class = aggregate_result.shape[1] - 1
     num_data = aggregate_result.shape[0]
@@ -293,9 +296,9 @@ if __name__ == "__main__":
             # np.save(f"{result_folder}/rdp_gp_cpsa.npy", certify('rdp_gp'))  
             # np.save(f"{result_folder}/dp_baseline_size_one_cpsa.npy", certify('dp_baseline_size_one'))
             # np.save(f"{result_folder}/best_dp_cpsa.npy", certify('best'))
-            # np.save(f"{result_folder}/dp_softmax_cpsa.npy", certify('dp_softmax'))
-            # np.save(f"{result_folder}/rdp_softmax_cpsa.npy", certify('rdp_softmax'))
-            np.save(f"{result_folder}/rdp_softmax_moments_cpsa.npy", certify('rdp_softmax_moments'))
+            np.save(f"{result_folder}/dp_softmax_cpsa.npy", certify('dp_softmax'))
+            np.save(f"{result_folder}/rdp_softmax_cpsa.npy", certify('rdp_softmax'))
+            # np.save(f"{result_folder}/rdp_softmax_moments_cpsa.npy", certify('rdp_softmax_moments'))
             # if args.train_mode == 'Sub-DP':
             #     np.save(f"{result_folder}/dp_bagging_cpsa.npy", certify('dp_bagging'))
             #     np.save(f"{result_folder}/dp_bagging_softmax_cpsa.npy", certify('dp_bagging_softmax'))
@@ -350,16 +353,17 @@ if __name__ == "__main__":
     elif args.mode == 'plot':
 
         # method_name = ['RDP', 'RDP-softmax', 'DP-Bagging', 'DP-Bagging-softmax', 'Baseline-Bagging', 'Baseline-DP']
-        method_name = ['RDP', 'RDP-softmax', 'RDP-softmax-moments', 'Baseline-Bagging']
+        # method_name = ['RDP-multinomial', 'RDP-softmax', 'DP-multinomial', 'DP-softmax', 'Baseline-DP']
         # method_name = ['RDP', 'RDP-large-alpha', 'Baseline-Bagging', 'Baseline-DP']
+        method_name = ['sigma=1.0', 'sigma=2.0', 'sigma=3.0', 'sigma=4.0']
 
         if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
             acc_list = []
             rad_list = []
             for name in method_name:
-                if name == 'DP':
+                if name == 'DP-multinomial':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/dp_cpsa.npy"), radius_range=args.radius_range)
-                elif name == 'RDP':
+                elif name == 'RDP-multinomial':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_cpsa.npy"), radius_range=args.radius_range)
                 elif name == 'RDP-softmax':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_softmax_cpsa.npy"), radius_range=args.radius_range)
@@ -381,11 +385,22 @@ if __name__ == "__main__":
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/dp_bagging_cpsa.npy"), radius_range=args.radius_range)
                 elif name == 'DP-Bagging-softmax':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/dp_bagging_softmax_cpsa.npy"), radius_range=args.radius_range)
+
+                elif name == 'sigma=1.0':
+                    acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_cpsa.npy"), radius_range=args.radius_range)
+                elif name == 'sigma=2.0':
+                    acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_cpsa1.npy"), radius_range=args.radius_range)
+                elif name == 'sigma=3.0':
+                    acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_cpsa2.npy"), radius_range=args.radius_range)
+                elif name == 'sigma=4.0':
+                    acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_cpsa3.npy"), radius_range=args.radius_range)
+                
+
                 else:
                     print('Invalid method name in Plot.')
                 acc_list.append(acc)
                 rad_list.append(rad)
-            plot_certified_acc(acc_list, rad_list, method_name, f"{result_folder}/rdp_softmax_compare_certified_acc_plot_gd_search.png")
+            plot_certified_acc(acc_list, rad_list, method_name, f"{result_folder}/rdp_multinomial_sigma.png")
 
             # sub_range = [60000, 30000, 20000]
             # cpsa_dp_list = []

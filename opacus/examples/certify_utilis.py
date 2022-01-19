@@ -21,7 +21,7 @@ def multi_ci(counts, alpha):
                 min(max(counts[i], 1e-10), n - 1e-10),
                 n,
                 alpha=alpha / 2,
-                method="normal",
+                method="beta",
             )
         )
     return np.array(multi_list)
@@ -148,9 +148,12 @@ def check_condition_dp(args, radius_value, epsilon, delta, p_l_value, p_s_value)
     group_eps = e * r
     group_delta = d * r
 
+    upper = (np.e**(group_eps)) * ps + group_delta
+    lower = (np.e**(-group_eps)) * (pl - group_delta)
+
     # print(r, e, d, pl, ps)
     try:
-        val = pl-ps*(np.e**(2*group_eps))-group_delta*(1+np.e**group_eps)
+        val = lower - upper
     except Exception:
         val = 0
 
@@ -183,14 +186,14 @@ def check_condition_dp_baseline(args, radius_value, epsilon, delta, p_l_value, p
 
 
 def rdp_bounds(radius, sample_rate, steps, alpha, sigma, p1, p2, softmax, agg_res_param=None, amplify=False, training_size=None, sub_training_size=None, clip=True):
-    sample_rate = 1 - (1 - sample_rate)**radius
+    sample_rate_gp = 1 - (1 - sample_rate)**radius
     if not amplify:
         rdp = PrivacyEngine._get_renyi_divergence(
-            sample_rate=sample_rate, noise_multiplier=sigma, alphas=[alpha]) * steps
+            sample_rate=sample_rate_gp, noise_multiplier=sigma, alphas=[alpha]) * steps
         eps = rdp.cpu().detach().numpy()[0]
     else:
         _, eps = rdp_amplify(alpha, sub_training_size,
-                             training_size, sample_rate, sigma)
+                             training_size, sample_rate_gp, sigma)
         eps *= steps
     
     if not softmax:
@@ -245,7 +248,7 @@ def check_condition_rdp_deprecated(args, radius, sample_rate, steps, sigma, p1, 
 
     max_lower = 0
     min_upper = 1
-    for alpha in [1 + x/100 for x in range(1, 1000)]:
+    for alpha in [1 + x/10 for x in range(1, 100)]:
         if args.train_mode == 'DP' or args.train_mode == 'Sub-DP-no-amp':
             lower, upper = rdp_bounds(radius, sample_rate, steps, alpha, sigma, p1, p2, softmax, agg_res_param=agg_res_param)
         elif args.train_mode == 'Sub-DP':
@@ -282,7 +285,7 @@ def check_condition_rdp(args, radius, sample_rate, steps, sigma, p1, p2, softmax
     # alphas, uppers, lowers = [], [], []
     
     if agg_res_param is None:
-        alpha_range = [1 + x/100 for x in range(1, 1001)]
+        alpha_range = [1 + x/10 for x in range(1, 101)]
     else:
         # need to make sure alpha/(alpha-1) is integer
         aa1_range = list(range(2, 1002))
@@ -307,6 +310,9 @@ def check_condition_rdp(args, radius, sample_rate, steps, sigma, p1, p2, softmax
             max_lower = lower
         if upper < min_upper:
             min_upper = upper
+        # we find the one need
+        if max_lower - min_upper > 0:
+            break
 
         # alphas.append(alpha)
         # uppers.append(upper)
@@ -487,7 +493,7 @@ def CertifyRadiusRDP(args, ls, CI, steps, sample_rate, sigma, softmax=False):
 
     valid_radius = set()
     # binary search for radius
-    low, high = 0, 50
+    low, high = 0, 1000
     while low <= high:
         radius = math.ceil((low + high) / 2.0)
         if check_condition_rdp(args, radius=radius, sample_rate=sample_rate, steps=steps, sigma=sigma, p1=p1, p2=p2, softmax=softmax):
@@ -523,7 +529,7 @@ def CertifyRadiusRDP_moments(args, ls, CI, steps, sample_rate, sigma, mgf_diff_l
 
     valid_radius = set()
     # binary search for radius
-    low, high = 0, 50
+    low, high = 0, 1000
     while low <= high:
         radius = math.ceil((low + high) / 2.0)
         if check_condition_rdp(args, radius=radius, sample_rate=sample_rate, steps=steps, sigma=sigma, p1=p1, p2=p2, softmax=softmax, agg_res_param=agg_res_param):
@@ -618,7 +624,7 @@ def CertifyRadiusDPBS(args, ls, CI, k, n, epsilon, delta, steps, sample_rate, si
     p_ls, runner_up_prob = top2_probs(CI, ls)
     if p_ls <= runner_up_prob:
         return -1, dp_rad
-    low, high = 0, 50
+    low, high = 0, 1000
     while low <= high:
         radius = math.ceil((low+high)/2.0)
         if check_condition_dp_bagging(radius, k, n, p_ls, runner_up_prob, dp_rad):
@@ -700,12 +706,26 @@ def get_dir(train_mode, results_folder, model_name, lr, sigma, max_per_sample_gr
     return result_folder
 
 
-def extract_summary(lines):
+def extract_summary_cifar(lines):
     import re
     accs = []
     epsilon = []
     for line in lines:
         accs.extend(re.findall(r'(?<=Acc@1: )\d+.\d+', line))
+        accs = list(map(float, accs))
+        epsilon.extend(re.findall(r'(?<=epsilon )\d+.\d+', line))
+        epsilon = list(map(float, epsilon))
+    if len(epsilon) == 0:
+        epsilon = [float('inf')]
+    return max(accs), min(epsilon)
+
+
+def extract_summary_mnist(lines):
+    import re
+    accs = []
+    epsilon = []
+    for line in lines:
+        accs.extend(re.findall(r'(?<=\()\d+.\d+', line))
         accs = list(map(float, accs))
         epsilon.extend(re.findall(r'(?<=epsilon )\d+.\d+', line))
         epsilon = list(map(float, epsilon))
