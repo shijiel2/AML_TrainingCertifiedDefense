@@ -15,6 +15,7 @@ import logging
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as func
 import torch.optim as optim
 import torch.utils.data
 import torch.utils.data.distributed
@@ -31,6 +32,7 @@ from tqdm import tqdm
 # from models import ResNet18
 from certify_utilis import result_folder_path_generator
 from opacus.utils import module_modification
+
 
 
 def setup():
@@ -65,6 +67,27 @@ def convnet(num_classes):
         nn.Flatten(start_dim=1, end_dim=-1),
         nn.Linear(128, num_classes, bias=True),
     )
+
+
+class LeNet(nn.Module):
+    def __init__(self):
+        super(LeNet, self).__init__()
+        self.conv1 = nn.Conv2d(3, 6, kernel_size=5)
+        self.conv2 = nn.Conv2d(6, 16, kernel_size=5)
+        self.fc1 = nn.Linear(16*5*5, 120)
+        self.fc2 = nn.Linear(120, 84)
+        self.fc3 = nn.Linear(84, 10)
+
+    def forward(self, x):
+        x = func.relu(self.conv1(x))
+        x = func.max_pool2d(x, 2)
+        x = func.relu(self.conv2(x))
+        x = func.max_pool2d(x, 2)
+        x = x.view(x.size(0), -1)
+        x = func.relu(self.fc1(x))
+        x = func.relu(self.fc2(x))
+        x = self.fc3(x)
+        return x
 
 
 def accuracy(preds, labels):
@@ -565,6 +588,8 @@ def main():
             model = convnet(num_classes=10).to(device)
         elif args.model_name == 'ResNet18':
             model = module_modification.convert_batchnorm_modules(models.resnet18(pretrained=False, num_classes=10)).to(device)
+        elif args.model_name == 'LeNet':
+            model = LeNet().to(device)
         else:
             exit(f'Model name {args.model_name} invaild.')
         if distributed:
@@ -589,16 +614,17 @@ def main():
             raise NotImplementedError("Optimizer not recognized. Please check spelling")
 
         # Define the DP engine
-        privacy_engine = PrivacyEngine(
-            model,
-            sample_rate=args.sample_rate * args.n_accumulation_steps,
-            alphas=[1 + x / 10.0 for x in range(1, 100)],
-            noise_multiplier= 0.0 if args.train_mode == 'Bagging' else args.sigma,
-            max_grad_norm=args.max_per_sample_grad_norm,
-            secure_rng=args.secure_rng,
-            **clipping,
-        )
-        privacy_engine.attach(optimizer)
+        if args.train_mode != 'Bagging':
+            privacy_engine = PrivacyEngine(
+                model,
+                sample_rate=args.sample_rate * args.n_accumulation_steps,
+                alphas=[1 + x / 10.0 for x in range(1, 100)],
+                noise_multiplier= 0.0 if args.train_mode == 'Bagging' else args.sigma,
+                max_grad_norm=args.max_per_sample_grad_norm,
+                secure_rng=args.secure_rng,
+                **clipping,
+            )
+            privacy_engine.attach(optimizer)
         # Training and testing
         model_pt_file = f"{models_folder}/model_{run_idx}.pt"
         if os.path.isfile(model_pt_file) or args.load_model:

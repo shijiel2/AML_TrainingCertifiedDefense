@@ -187,9 +187,9 @@ def certify(method_name):
     certified_poisoning_size_array = np.zeros([num_data], dtype=np.int)
     dp_bagging_rads = []
 
-    if 'softmax' in method_name:
-        import pickle
-        mgf_diff_list = pickle.load(open('../results/mgf_diff_list.p', 'rb'))
+    # if 'softmax' in method_name:
+    #     import pickle
+    #     mgf_diff_list = pickle.load(open('../results/mgf_diff_list.p', 'rb'))
 
     for idx in tqdm(range(num_data)):
         # Multinomial or Softmax scores
@@ -291,8 +291,8 @@ if __name__ == "__main__":
     # Certify
     if args.mode == 'certify':
         if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
-            # np.save(f"{result_folder}/dp_cpsa.npy", certify('dp'))
-            # np.save(f"{result_folder}/rdp_cpsa.npy", certify('rdp'))    
+            np.save(f"{result_folder}/dp_cpsa.npy", certify('dp'))
+            np.save(f"{result_folder}/rdp_cpsa.npy", certify('rdp'))    
             # np.save(f"{result_folder}/rdp_gp_cpsa.npy", certify('rdp_gp'))  
             # np.save(f"{result_folder}/dp_baseline_size_one_cpsa.npy", certify('dp_baseline_size_one'))
             # np.save(f"{result_folder}/best_dp_cpsa.npy", certify('best'))
@@ -353,9 +353,9 @@ if __name__ == "__main__":
     elif args.mode == 'plot':
 
         # method_name = ['RDP', 'RDP-softmax', 'DP-Bagging', 'DP-Bagging-softmax', 'Baseline-Bagging', 'Baseline-DP']
-        # method_name = ['RDP-multinomial', 'RDP-softmax', 'DP-multinomial', 'DP-softmax', 'Baseline-DP']
+        method_name = ['RDP-multinomial', 'RDP-softmax', 'DP-multinomial', 'DP-softmax', 'Baseline-DP']
         # method_name = ['RDP', 'RDP-large-alpha', 'Baseline-Bagging', 'Baseline-DP']
-        method_name = ['sigma=1.0', 'sigma=2.0', 'sigma=3.0', 'sigma=4.0']
+        # method_name = ['sigma=1.0', 'sigma=2.0', 'sigma=3.0', 'sigma=4.0']
 
         if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
             acc_list = []

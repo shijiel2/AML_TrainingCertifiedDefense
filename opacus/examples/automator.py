@@ -9,9 +9,9 @@ from notification import NOTIFIER
 from datetime import datetime
 
 
-MODE = ['train', 'neval', 'ncertify', 'nplot', 'nablation', 'nsub-acc-test', 'nsummary']
-DATASET = 'fashion_mnist'
-TRAIN_MODE = 'DP' # DP, Sub-DP, Bagging, Sub-DP-no-amp
+MODE = ['train', 'neval', 'ncertify', 'plot', 'nablation', 'nsub-acc-test', 'summary']
+DATASET = 'cifar10'
+TRAIN_MODE = 'Bagging' # DP, Sub-DP, Bagging, Sub-DP-no-amp
 
 # No saving
 TRAIN_COMMAND = 'python {dataset}.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr} -c {c} --model-name {model_name} --sub-training-size {sub_training_size} --train-mode {train_mode}' # --save-model
@@ -39,26 +39,26 @@ if DATASET == 'fashion_mnist':
     results_folder = '../results/fashion_mnist'
     model_name = 'LeNet'
     training_size = 60000
-    n_runss = [1]
-    epochss = [100]
-    sigmas = [0.0]
+    n_runss = [1000]
+    epochss = [1]
+    sigmas = [2.0]
     sample_rates = [0.001]
-    lrs = [0.1, 0.01, 0.001]
+    lrs = [0.1]
     clips = [1.0]
-    sub_training_sizes = [500, 1000, 2000, 5000, 10000, 20000]
+    sub_training_sizes = [500]
 
 
 elif DATASET == 'cifar10':
     results_folder = '../results/cifar10'
-    model_name = 'ResNet18'
+    model_name = 'LeNet'
     training_size = 50000
     n_runss = [1]
-    epochss = [200]
+    epochss = [100]
     sigmas = [2.0] # sigmas = [1.0, 1.5, 2.0]
     sample_rates = [0.01024] # sample_rates = [512/10000, 1024/10000]
-    lrs = [0.01] # lrs = [0.01, 0.05, 0.1]
+    lrs = [0.1, 0.01, 0.001] # lrs = [0.01, 0.05, 0.1]
     clips = [20.0] # clips = [34 for sigma=1]
-    sub_training_sizes = [10000]
+    sub_training_sizes = [500, 1000, 5000, 10000, 20000]
     
 
 if 'train' in MODE:
@@ -106,7 +106,7 @@ if 'summary' in MODE:
             lines = f.readlines()
             if DATASET == 'cifar10':
                 acc, eps = extract_summary_cifar(lines)
-            elif DATASET == 'mnist':
+            elif DATASET == 'mnist' or DATASET == 'fashion_mnist':
                 acc, eps = extract_summary_mnist(lines)
             summarys.append((dir_path, acc, eps))
     summarys.sort(key=lambda x:x[1])
