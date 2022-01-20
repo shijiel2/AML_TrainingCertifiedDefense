@@ -7,11 +7,12 @@ import subprocess
 from certify_utilis import get_dir, extract_summary_cifar, extract_summary_mnist
 from notification import NOTIFIER
 from datetime import datetime
+from pathlib import Path
 
 
-MODE = ['train', 'neval', 'ncertify', 'plot', 'nablation', 'nsub-acc-test', 'summary']
+MODE = ['train', 'neval', 'ncertify', 'nplot', 'nablation', 'nsub-acc-test', 'summary']
 DATASET = 'cifar10'
-TRAIN_MODE = 'Bagging' # DP, Sub-DP, Bagging, Sub-DP-no-amp
+TRAIN_MODE = 'DP' # DP, Sub-DP, Bagging, Sub-DP-no-amp
 
 # No saving
 TRAIN_COMMAND = 'python {dataset}.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr} -c {c} --model-name {model_name} --sub-training-size {sub_training_size} --train-mode {train_mode}' # --save-model
@@ -54,11 +55,11 @@ elif DATASET == 'cifar10':
     training_size = 50000
     n_runss = [1]
     epochss = [100]
-    sigmas = [2.0] # sigmas = [1.0, 1.5, 2.0]
-    sample_rates = [0.01024] # sample_rates = [512/10000, 1024/10000]
+    sigmas = [0.1, 0.5, 1.0, 2.0] # sigmas = [1.0, 1.5, 2.0]
+    sample_rates = [0.001] # sample_rates = [512/10000, 1024/10000]
     lrs = [0.1, 0.01, 0.001] # lrs = [0.01, 0.05, 0.1]
-    clips = [20.0] # clips = [34 for sigma=1]
-    sub_training_sizes = [500, 1000, 5000, 10000, 20000]
+    clips = [1.0, 5.0, 10.0, 20.0, 30.0] # clips = [34 for sigma=1]
+    sub_training_sizes = [500]
     
 
 if 'train' in MODE:
@@ -110,9 +111,20 @@ if 'summary' in MODE:
                 acc, eps = extract_summary_mnist(lines)
             summarys.append((dir_path, acc, eps))
     summarys.sort(key=lambda x:x[1])
-    with open(f'{results_folder}/summary_{datetime.now()}.txt', 'w') as f:
+    
+    # make folder 
+    summary_folder = f'{results_folder}/summary_{datetime.now()}'
+    Path(summary_folder).mkdir(parents=True, exist_ok=True)
+    with open(f'{summary_folder}/summary_{datetime.now()}.txt', 'w') as f:
         for line in summarys:
             f.write(str(line) + '\n')
+    # move dirs
+    import shutil
+    for nr, ep, sig, sr, lr, c, sts in itertools.product(n_runss, epochss, sigmas, sample_rates, lrs, clips, sub_training_sizes):
+        ori_dir_path = get_dir(TRAIN_MODE, results_folder, model_name, lr, sig, c, sr, ep, nr, sts)
+        tar_dir_path = ori_dir_path.replace(results_folder, summary_folder)
+        shutil.move(ori_dir_path, tar_dir_path)
+
 
 
 NOTIFIER.notify(socket.gethostname(), 'Job Done.')
