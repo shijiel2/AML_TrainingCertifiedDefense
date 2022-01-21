@@ -10,9 +10,9 @@ from datetime import datetime
 from pathlib import Path
 
 
-MODE = ['train', 'neval', 'ncertify', 'nplot', 'nablation', 'nsub-acc-test', 'summary']
+MODE = ['train', 'neval', 'certify', 'plot', 'nablation', 'nsub-acc-test', 'nsummary']
 DATASET = 'cifar10'
-TRAIN_MODE = 'DP' # DP, Sub-DP, Bagging, Sub-DP-no-amp
+TRAIN_MODE = 'Sub-DP-no-amp' # DP, Sub-DP, Bagging, Sub-DP-no-amp
 
 # No saving
 TRAIN_COMMAND = 'python {dataset}.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr} -c {c} --model-name {model_name} --sub-training-size {sub_training_size} --train-mode {train_mode}' # --save-model
@@ -51,15 +51,15 @@ if DATASET == 'fashion_mnist':
 
 elif DATASET == 'cifar10':
     results_folder = '../results/cifar10'
-    model_name = 'LeNet'
+    model_name = 'ConvNet'
     training_size = 50000
-    n_runss = [1]
-    epochss = [100]
-    sigmas = [0.1, 0.5, 1.0, 2.0] # sigmas = [1.0, 1.5, 2.0]
-    sample_rates = [0.001] # sample_rates = [512/10000, 1024/10000]
-    lrs = [0.1, 0.01, 0.001] # lrs = [0.01, 0.05, 0.1]
-    clips = [1.0, 5.0, 10.0, 20.0, 30.0] # clips = [34 for sigma=1]
-    sub_training_sizes = [500]
+    n_runss = [1000]
+    epochss = [90]
+    sigmas = [2.0] # sigmas = [1.0, 1.5, 2.0]
+    sample_rates = [0.01024] # sample_rates = [512/10000, 1024/10000]
+    lrs = [0.01] # lrs = [0.01, 0.05, 0.1]
+    clips = [20.0] # clips = [34 for sigma=1]
+    sub_training_sizes = [10000]
     
 
 if 'train' in MODE:
