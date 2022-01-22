@@ -352,10 +352,8 @@ if __name__ == "__main__":
     # Plot
     elif args.mode == 'plot':
 
-        # method_name = ['RDP', 'RDP-softmax', 'DP-Bagging', 'DP-Bagging-softmax', 'Baseline-Bagging', 'Baseline-DP']
-        method_name = ['RDP-multinomial', 'RDP-softmax', 'DP-multinomial', 'DP-softmax', 'Baseline-DP', 'Baseline-Bagging']
-        method_name = ['RDP-multinomial', 'RDP-softmax', 'DP-multinomial', 'DP-softmax', 'Baseline-DP']
-        # method_name = ['RDP', 'RDP-large-alpha', 'Baseline-Bagging', 'Baseline-DP']
+        # method_name = ['RDP-multinomial', 'RDP-softmax', 'ADP-multinomial', 'ADP-softmax', 'Baseline-DP', 'Baseline-Bagging']
+        method_name = ['RDP-multinomial', 'RDP-softmax', 'ADP-multinomial', 'ADP-softmax', 'Baseline-DP']
         # method_name = ['sigma=1.0', 'sigma=2.0', 'sigma=3.0', 'sigma=4.0']
         # method_name = ['Baseline-Bagging']
 
@@ -363,7 +361,7 @@ if __name__ == "__main__":
             acc_list = []
             rad_list = []
             for name in method_name:
-                if name == 'DP-multinomial':
+                if name == 'ADP-multinomial':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/dp_cpsa.npy"), radius_range=args.radius_range)
                 elif name == 'RDP-multinomial':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_cpsa.npy"), radius_range=args.radius_range)
@@ -371,7 +369,7 @@ if __name__ == "__main__":
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_softmax_cpsa.npy"), radius_range=args.radius_range)
                 elif name == 'RDP-softmax-moments':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_softmax_moments_cpsa.npy"), radius_range=args.radius_range)
-                elif name == 'DP-softmax':
+                elif name == 'ADP-softmax':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/dp_softmax_cpsa.npy"), radius_range=args.radius_range)
                 elif name == 'Baseline-RDP-GP':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_gp_cpsa.npy"), radius_range=args.radius_range)
