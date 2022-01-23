@@ -208,9 +208,9 @@ def certify(method_name):
         elif method_name == 'rdp_softmax':
             rd = CertifyRadiusRDP(args, ls, CI,
                                   rdp_steps, args.sample_rate, args.sigma, softmax=True)
-        elif method_name == 'rdp_softmax_moments':
-            rd = CertifyRadiusRDP_moments(args, ls, CI,
-                                  rdp_steps, args.sample_rate, args.sigma, mgf_diff_list, varis, softmax=True)
+        # elif method_name == 'rdp_softmax_moments':
+        #     rd = CertifyRadiusRDP_moments(args, ls, CI,
+        #                           rdp_steps, args.sample_rate, args.sigma, mgf_diff_list, varis, softmax=True)
         elif method_name == 'rdp_gp':
             rd = CertifyRadiusRDP_GP(args, ls, CI,
                                   rdp_steps, args.sample_rate, args.sigma)
