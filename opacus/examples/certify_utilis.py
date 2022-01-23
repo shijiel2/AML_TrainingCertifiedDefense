@@ -450,7 +450,7 @@ def CertifyRadiusDP(args, ls, CI, epsilon, delta):
     if p_ls <= runner_up_prob:
         return -1
     # this is where to calculate the r
-    low, high = 0, 1000
+    low, high = 0, 200
     while low <= high:
         radius = math.ceil((low + high) / 2.0)
         if check_condition_dp(args, radius, epsilon, delta, p_ls, runner_up_prob):
@@ -471,7 +471,7 @@ def CertifyRadiusDP_baseline(args, ls, CI, epsilon, delta):
     if p_ls <= runner_up_prob:
         return -1
     # this is where to calculate the r
-    low, high = 0, 1000
+    low, high = 0, 200
     while low <= high:
         radius = math.ceil((low + high) / 2.0)
         if check_condition_dp_baseline(args, radius, epsilon, delta, p_ls, runner_up_prob):
@@ -493,7 +493,7 @@ def CertifyRadiusRDP(args, ls, CI, steps, sample_rate, sigma, softmax=False):
 
     valid_radius = set()
     # binary search for radius
-    low, high = 0, 1000
+    low, high = 0, 200
     while low <= high:
         radius = math.ceil((low + high) / 2.0)
         if check_condition_rdp(args, radius=radius, sample_rate=sample_rate, steps=steps, sigma=sigma, p1=p1, p2=p2, softmax=softmax):
@@ -529,7 +529,7 @@ def CertifyRadiusRDP_moments(args, ls, CI, steps, sample_rate, sigma, mgf_diff_l
 
     valid_radius = set()
     # binary search for radius
-    low, high = 0, 1000
+    low, high = 0, 200
     while low <= high:
         radius = math.ceil((low + high) / 2.0)
         if check_condition_rdp(args, radius=radius, sample_rate=sample_rate, steps=steps, sigma=sigma, p1=p1, p2=p2, softmax=softmax, agg_res_param=agg_res_param):
@@ -565,7 +565,7 @@ def CertifyRadiusRDP_GP(args, ls, CI, steps, sample_rate, sigma):
         # for delta in [x / 100.0 for x in range(1, 10)]:
         for delta in [0]:
             # binary search for radius
-            low, high = 0, 1000
+            low, high = 0, 200
             while low <= high:
                 radius = math.ceil((low + high) / 2.0)
                 if check_condition_rdp_gp(args, radius=radius, sample_rate=sample_rate, steps=steps, alpha=alpha, delta=delta, sigma=sigma, p1=p1, p2=p2):
@@ -596,7 +596,7 @@ def CertifyRadiusBS(ls, CI, k, n):
     p_ls, runner_up_prob = top2_probs(CI, ls)
     if p_ls <= runner_up_prob:
         return -1
-    low, high = 0, 1500
+    low, high = 0, 200
     while low <= high:
         radius = math.ceil((low+high)/2.0)
         if check_condition_bagging(radius, k, n, p_ls, runner_up_prob):
@@ -624,7 +624,7 @@ def CertifyRadiusDPBS(args, ls, CI, k, n, epsilon, delta, steps, sample_rate, si
     p_ls, runner_up_prob = top2_probs(CI, ls)
     if p_ls <= runner_up_prob:
         return -1, dp_rad
-    low, high = 0, 1000
+    low, high = 0, 200
     while low <= high:
         radius = math.ceil((low+high)/2.0)
         if check_condition_dp_bagging(radius, k, n, p_ls, runner_up_prob, dp_rad):
