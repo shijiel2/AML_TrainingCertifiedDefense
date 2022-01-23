@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-MODE = ['train', 'neval', 'certify', 'plot', 'nablation', 'nsub-acc-test', 'nsummary']
+MODE = ['train', 'neval', 'ncertify', 'nplot', 'nablation', 'nsub-acc-test', 'summary']
 DATASET = 'cifar10'
 TRAIN_MODE = 'Sub-DP-no-amp' # DP, Sub-DP, Bagging, Sub-DP-no-amp
 
@@ -53,12 +53,12 @@ elif DATASET == 'cifar10':
     results_folder = '../results/cifar10'
     model_name = 'ConvNet'
     training_size = 50000
-    n_runss = [1000]
+    n_runss = [5]
     epochss = [90]
-    sigmas = [2.0] # sigmas = [1.0, 1.5, 2.0]
+    sigmas = [1.0] # sigmas = [1.0, 1.5, 2.0]
     sample_rates = [0.01024] # sample_rates = [512/10000, 1024/10000]
     lrs = [0.01] # lrs = [0.01, 0.05, 0.1]
-    clips = [20.0] # clips = [34 for sigma=1]
+    clips = [x * 10.0 for x in range(6, 10)] # clips = [34 for sigma=1]
     sub_training_sizes = [10000]
     
 
