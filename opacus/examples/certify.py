@@ -106,7 +106,7 @@ parser.add_argument(
 parser.add_argument(
     "--radius-range",
     type=int,
-    default=10,
+    default=150,
     help="Size of training set",
 )
 parser.add_argument(
