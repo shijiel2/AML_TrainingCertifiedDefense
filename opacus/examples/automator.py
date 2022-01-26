@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 MODE = ['train', 'neval', 'certify', 'plot', 'nablation', 'nsub-acc-test', 'nsummary']
-DATASET = 'fashion_mnist'
+DATASET = 'mnist'
 TRAIN_MODE = 'DP' # DP, Sub-DP, Bagging, Sub-DP-no-amp
 
 # No saving
@@ -27,12 +27,12 @@ if DATASET == 'mnist':
     results_folder = '../results/mnist'
     model_name = 'LeNet'
     training_size = 60000
-    n_runss = [1]
-    epochss = [100]
-    sigmas = [1.0]
+    n_runss = [1000]
+    epochss = [1]
+    sigmas = [1.0] # (sigma, clip): (1.0, 2.4), (2.0, 1.3), (3.0, 0.8), (4.0, 0.7)
     sample_rates = [0.001]
     lrs = [0.1]
-    clips = [1.0]
+    clips = [2.4]
     sub_training_sizes = [500]
 
 
