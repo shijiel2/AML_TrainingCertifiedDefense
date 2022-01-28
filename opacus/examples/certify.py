@@ -106,7 +106,7 @@ parser.add_argument(
 parser.add_argument(
     "--radius-range",
     type=int,
-    default=250,
+    default=150,
     help="Size of training set",
 )
 parser.add_argument(
@@ -352,9 +352,9 @@ if __name__ == "__main__":
     # Plot
     elif args.mode == 'plot':
 
-        # method_name = ['RDP-multinomial', 'RDP-softmax', 'ADP-multinomial', 'ADP-softmax', 'Baseline-DP', 'Baseline-Bagging']
+        method_name = ['RDP-multinomial', 'RDP-softmax', 'ADP-multinomial', 'ADP-softmax', 'Baseline-DP', 'Baseline-Bagging']
         # method_name = ['RDP-multinomial', 'RDP-softmax', 'ADP-multinomial', 'ADP-softmax', 'Baseline-DP']
-        method_name = [r'$\sigma = 1.0$', r'$\sigma = 2.0$', r'$\sigma = 3.0$', r'$\sigma = 4.0$']
+        # method_name = [r'$\sigma = 1.0$', r'$\sigma = 2.0$', r'$\sigma = 3.0$', r'$\sigma = 4.0$']
         # method_name = ['Baseline-Bagging']
 
         if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
@@ -374,18 +374,18 @@ if __name__ == "__main__":
                 elif name == 'RDP-softmax':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_softmax_cpsa.npy"), radius_range=args.radius_range)
                     col = 'tab:blue'
-                    sty = 'dotted'
+                    sty = 'dashed'
                 elif name == 'RDP-softmax-moments':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_softmax_moments_cpsa.npy"), radius_range=args.radius_range)
                 elif name == 'ADP-softmax':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/dp_softmax_cpsa.npy"), radius_range=args.radius_range)
                     col = 'tab:orange'
-                    sty = 'dotted'
+                    sty = 'dashed'
                 elif name == 'Baseline-RDP-GP':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_gp_cpsa.npy"), radius_range=args.radius_range)
                 elif name == 'Baseline-DP':
                     acc, rad = certified_acc_against_radius_dp_baseline(np.load(f"{result_folder}/acc_list.npy"), dp_epsilon, radius_range=args.radius_range)
-                    col = 'tab:brown'
+                    col = 'tab:green'
                     sty = 'solid'
                 elif name == 'Baseline-DP-size-one':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/dp_baseline_size_one_cpsa.npy"), radius_range=args.radius_range)
@@ -414,7 +414,7 @@ if __name__ == "__main__":
                     sty = 'solid'
                 elif name == r'$\sigma = 4.0$':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_cpsa4.npy"), radius_range=args.radius_range)
-                    col = 'tab:brown'
+                    col = 'tab:green'
                     sty = 'solid'
                 
 
