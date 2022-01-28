@@ -106,7 +106,7 @@ parser.add_argument(
 parser.add_argument(
     "--radius-range",
     type=int,
-    default=150,
+    default=250,
     help="Size of training set",
 )
 parser.add_argument(
@@ -150,11 +150,11 @@ def certified_acc_against_radius_dp_baseline(clean_acc_list, dp_epsilon, dp_delt
     return certified_acc_list, certified_radius_list
 
 
-def plot_certified_acc(c_acc_lists, c_rad_lists, name_list, plot_path, xlabel='Radius', ylabel='Certified Accuracy'):
+def plot_certified_acc(c_acc_lists, c_rad_lists, name_list, color_list, linestyle_list, plot_path, xlabel='Radius', ylabel='Certified Accuracy'):
     print(plot_path)
-    for c_acc_list, c_rad_list, name in zip(c_acc_lists, c_rad_lists, name_list):
+    for c_acc_list, c_rad_list, name, color, linestyle in zip(c_acc_lists, c_rad_lists, name_list, color_list, linestyle_list):
         logging.info(f'(Rad, Acc):{list(zip(c_rad_list, c_acc_list))}')
-        plt.plot(c_rad_list, c_acc_list, label=name)
+        plt.plot(c_rad_list, c_acc_list, color, label=name, linewidth=1, linestyle=linestyle)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     plt.legend(loc="upper right")
@@ -353,32 +353,46 @@ if __name__ == "__main__":
     elif args.mode == 'plot':
 
         # method_name = ['RDP-multinomial', 'RDP-softmax', 'ADP-multinomial', 'ADP-softmax', 'Baseline-DP', 'Baseline-Bagging']
-        method_name = ['RDP-multinomial', 'RDP-softmax', 'ADP-multinomial', 'ADP-softmax', 'Baseline-DP']
-        # method_name = ['sigma=1.0', 'sigma=2.0', 'sigma=3.0', 'sigma=4.0']
+        # method_name = ['RDP-multinomial', 'RDP-softmax', 'ADP-multinomial', 'ADP-softmax', 'Baseline-DP']
+        method_name = [r'$\sigma = 1.0$', r'$\sigma = 2.0$', r'$\sigma = 3.0$', r'$\sigma = 4.0$']
         # method_name = ['Baseline-Bagging']
 
         if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
             acc_list = []
             rad_list = []
+            color_list = []
+            linestyle_list = []
             for name in method_name:
                 if name == 'ADP-multinomial':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/dp_cpsa.npy"), radius_range=args.radius_range)
+                    col = 'tab:orange'
+                    sty = 'solid'
                 elif name == 'RDP-multinomial':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_cpsa.npy"), radius_range=args.radius_range)
+                    col = 'tab:blue'
+                    sty = 'solid'
                 elif name == 'RDP-softmax':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_softmax_cpsa.npy"), radius_range=args.radius_range)
+                    col = 'tab:blue'
+                    sty = 'dotted'
                 elif name == 'RDP-softmax-moments':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_softmax_moments_cpsa.npy"), radius_range=args.radius_range)
                 elif name == 'ADP-softmax':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/dp_softmax_cpsa.npy"), radius_range=args.radius_range)
+                    col = 'tab:orange'
+                    sty = 'dotted'
                 elif name == 'Baseline-RDP-GP':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_gp_cpsa.npy"), radius_range=args.radius_range)
                 elif name == 'Baseline-DP':
                     acc, rad = certified_acc_against_radius_dp_baseline(np.load(f"{result_folder}/acc_list.npy"), dp_epsilon, radius_range=args.radius_range)
+                    col = 'tab:brown'
+                    sty = 'solid'
                 elif name == 'Baseline-DP-size-one':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/dp_baseline_size_one_cpsa.npy"), radius_range=args.radius_range)
                 elif name == 'Baseline-Bagging':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/bagging_cpsa.npy"), radius_range=args.radius_range)
+                    col = 'tab:purple'
+                    sty = 'solid'
                 elif name == 'Best-DP':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/best_dp_cpsa.npy"), radius_range=args.radius_range)
                 elif name == 'DP-Bagging':
@@ -386,21 +400,31 @@ if __name__ == "__main__":
                 elif name == 'DP-Bagging-softmax':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/dp_bagging_softmax_cpsa.npy"), radius_range=args.radius_range)
 
-                elif name == 'sigma=1.0':
-                    acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_cpsa.npy"), radius_range=args.radius_range)
-                elif name == 'sigma=2.0':
+                elif name == r'$\sigma = 1.0$':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_cpsa1.npy"), radius_range=args.radius_range)
-                elif name == 'sigma=3.0':
+                    col = 'tab:orange'
+                    sty = 'solid'
+                elif name == r'$\sigma = 2.0$':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_cpsa2.npy"), radius_range=args.radius_range)
-                elif name == 'sigma=4.0':
+                    col = 'tab:blue'
+                    sty = 'solid'
+                elif name == r'$\sigma = 3.0$':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_cpsa3.npy"), radius_range=args.radius_range)
+                    col = 'tab:purple'
+                    sty = 'solid'
+                elif name == r'$\sigma = 4.0$':
+                    acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_cpsa4.npy"), radius_range=args.radius_range)
+                    col = 'tab:brown'
+                    sty = 'solid'
                 
 
                 else:
                     print('Invalid method name in Plot.')
                 acc_list.append(acc)
                 rad_list.append(rad)
-            plot_certified_acc(acc_list, rad_list, method_name, f"{result_folder}/rdp_multinomial_sigma.png")
+                color_list.append(col)
+                linestyle_list.append(sty)
+            plot_certified_acc(acc_list, rad_list, method_name, color_list, linestyle_list, f"{result_folder}/mnist_sigma.png")
 
             # sub_range = [60000, 30000, 20000]
             # cpsa_dp_list = []

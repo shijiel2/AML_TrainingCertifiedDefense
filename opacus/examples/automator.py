@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-MODE = ['train', 'neval', 'certify', 'plot', 'nablation', 'nsub-acc-test', 'nsummary']
+MODE = ['ntrain', 'neval', 'ncertify', 'plot', 'nablation', 'nsub-acc-test', 'nsummary']
 DATASET = 'mnist'
 TRAIN_MODE = 'DP' # DP, Sub-DP, Bagging, Sub-DP-no-amp
 
@@ -29,10 +29,10 @@ if DATASET == 'mnist':
     training_size = 60000
     n_runss = [1000]
     epochss = [1]
-    sigmas = [1.0] # (sigma, clip): (1.0, 2.4), (2.0, 1.3), (3.0, 0.8), (4.0, 0.7)
+    sigmas = [2.0] # (sigma, clip): (1.0, 2.4), (2.0, 1.3), (3.0, 0.8), (4.0, 0.7)
     sample_rates = [0.001]
     lrs = [0.1]
-    clips = [2.4]
+    clips = [1.0]
     sub_training_sizes = [500]
 
 
@@ -45,7 +45,7 @@ if DATASET == 'fashion_mnist':
     sigmas = [1.0] # sigma=1.0, C=2.1; sigma=2.0, C=1.0; sigma=3.0, C=1.0; sigma=4.0, C=0.8; 
     sample_rates = [0.001]
     lrs = [0.1]
-    clips = [2.1]
+    clips = [1.0]
     sub_training_sizes = [500]
 
 
