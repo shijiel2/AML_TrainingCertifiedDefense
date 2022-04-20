@@ -106,7 +106,7 @@ parser.add_argument(
 parser.add_argument(
     "--radius-range",
     type=int,
-    default=150,
+    default=220,
     help="Size of training set",
 )
 parser.add_argument(
@@ -352,9 +352,9 @@ if __name__ == "__main__":
     # Plot
     elif args.mode == 'plot':
 
-        method_name = ['RDP-multinomial', 'RDP-softmax', 'ADP-multinomial', 'ADP-softmax', 'Baseline-DP', 'Baseline-Bagging']
+        # method_name = ['RDP-multinomial', 'RDP-softmax', 'ADP-multinomial', 'ADP-softmax', 'Baseline-DP', 'Baseline-Bagging']
         # method_name = ['RDP-multinomial', 'RDP-softmax', 'ADP-multinomial', 'ADP-softmax', 'Baseline-DP']
-        # method_name = [r'$\sigma = 1.0$', r'$\sigma = 2.0$', r'$\sigma = 3.0$', r'$\sigma = 4.0$']
+        method_name = [r'$\sigma = 1.0$', r'$\sigma = 2.0$', r'$\sigma = 3.0$', r'$\sigma = 4.0$']
         # method_name = ['Baseline-Bagging']
 
         if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:

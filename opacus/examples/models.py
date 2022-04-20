@@ -1,9 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision import models
-from opacus.dp_model_inspector import DPModelInspector
-from opacus.utils import module_modification
 
 
 class BasicBlock(nn.Module):
@@ -93,9 +90,7 @@ class ResNet(nn.Module):
 
 
 def ResNet18(num_classes):
-    model = ResNet(BasicBlock, [2, 2, 2, 2], num_classes)
-    model = module_modification.convert_batchnorm_modules(model)
-    return model
+    return ResNet(BasicBlock, [2, 2, 2, 2], num_classes)
 
 def ResNet34(num_classes):
     return ResNet(BasicBlock, [3, 4, 6, 3], num_classes)

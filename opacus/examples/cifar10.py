@@ -29,7 +29,7 @@ from opacus.utils.uniform_sampler import UniformWithReplacementSampler, FixedSiz
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torchvision.datasets import CIFAR10
 from tqdm import tqdm
-# from models import ResNet18
+from models import ResNet18
 from certify_utilis import result_folder_path_generator
 from opacus.utils import module_modification
 
@@ -278,7 +278,7 @@ def main():
     parser.add_argument(
         "--wd",
         "--weight-decay",
-        default=0,
+        default=5e-4,
         type=float,
         metavar="W",
         help="SGD weight decay",
@@ -493,10 +493,11 @@ def main():
     augmentations = [
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
     ]
     normalize = [
-        transforms.ToTensor(),
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        transforms.ToTensor(),
     ]
 
     def gen_sub_dataset(dataset, sub_training_size, with_replacement):
@@ -506,7 +507,7 @@ def main():
         return dataset
 
     def gen_train_dataset_loader(or_sub_training_size=None):
-        train_transform = transforms.Compose(normalize)
+        train_transform = transforms.Compose(augmentations)
         train_dataset = CIFAR10(
             root=args.data_root, train=True, download=True, transform=train_transform
         )
@@ -545,13 +546,13 @@ def main():
                 train_dataset,
                 num_workers=args.workers,
                 generator=generator,
-                batch_size=100,
+                batch_size=128,
                 shuffle=True,
             )
         return train_dataset, train_loader
 
     def gen_test_dataset_loader():
-        test_transform = transforms.Compose(normalize)
+        test_transform = transforms.Compose(augmentations)
         test_dataset = CIFAR10(
             root=args.data_root, train=False, download=True, transform=test_transform
         )
@@ -587,7 +588,10 @@ def main():
         if args.model_name == 'ConvNet':
             model = convnet(num_classes=10).to(device)
         elif args.model_name == 'ResNet18':
-            model = module_modification.convert_batchnorm_modules(models.resnet18(pretrained=False, num_classes=10)).to(device)
+            # model = module_modification.convert_batchnorm_modules(models.resnet18(pretrained=False, num_classes=10)).to(device)
+            # model = models.resnet18(pretrained=False, num_classes=10).to(device)
+            model = module_modification.convert_batchnorm_modules(ResNet18(10)).to(device)
+            
         elif args.model_name == 'LeNet':
             model = LeNet().to(device)
         else:
