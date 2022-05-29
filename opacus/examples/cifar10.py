@@ -19,12 +19,12 @@ import torch.nn.functional as func
 import torch.optim as optim
 import torch.utils.data
 import torch.utils.data.distributed
-import torch.utils.tensorboard as tensorboard
+# import torch.utils.tensorboard as tensorboard
 import torchvision.transforms as transforms
 import torchvision.models as models
 from opacus import PrivacyEngine
 from opacus.layers import DifferentiallyPrivateDistributedDataParallel as DPDDP
-from opacus.utils import stats
+# from opacus.utils import stats
 from opacus.utils.uniform_sampler import UniformWithReplacementSampler, FixedSizedUniformWithReplacementSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torchvision.datasets import CIFAR10
@@ -117,7 +117,7 @@ def train(args, model, train_loader, optimizer, epoch, device):
 
         losses.append(loss.item())
         top1_acc.append(acc1)
-        stats.update(stats.StatType.TRAIN, acc1=acc1)
+        # stats.update(stats.StatType.TRAIN, acc1=acc1)
 
         # compute gradient and do SGD step
         loss.backward()
@@ -170,7 +170,7 @@ def test(args, model, test_loader, device):
             top1_acc.append(acc1)
 
     top1_avg = np.mean(top1_acc)
-    stats.update(stats.StatType.TEST, acc1=top1_avg)
+    # stats.update(stats.StatType.TEST, acc1=top1_avg)
 
     strv = f"\tTest set:" f"Loss: {np.mean(losses):.6f} " f"Acc@1: {top1_avg :.6f} "
     logging.info(strv)
@@ -454,22 +454,22 @@ def main():
 
     # The following few lines, enable stats gathering about the run
     # 1. where the stats should be logged
-    stats.set_global_summary_writer(
-        tensorboard.SummaryWriter(os.path.join("/tmp/stat", args.log_dir))
-    )
+    # stats.set_global_summary_writer(
+    #     tensorboard.SummaryWriter(os.path.join("/tmp/stat", args.log_dir))
+    # )
     # 2. enable stats
-    stats.add(
-        # stats about gradient norms aggregated for all layers
-        stats.Stat(stats.StatType.GRAD, "AllLayers", frequency=0.1),
-        # stats about gradient norms per layer
-        stats.Stat(stats.StatType.GRAD, "PerLayer", frequency=0.1),
-        # stats about clipping
-        stats.Stat(stats.StatType.GRAD, "ClippingStats", frequency=0.1),
-        # stats on training accuracy
-        stats.Stat(stats.StatType.TRAIN, "accuracy", frequency=0.01),
-        # stats on validation accuracy
-        stats.Stat(stats.StatType.TEST, "accuracy"),
-    )
+    # stats.add(
+    #     # stats about gradient norms aggregated for all layers
+    #     stats.Stat(stats.StatType.GRAD, "AllLayers", frequency=0.1),
+    #     # stats about gradient norms per layer
+    #     stats.Stat(stats.StatType.GRAD, "PerLayer", frequency=0.1),
+    #     # stats about clipping
+    #     stats.Stat(stats.StatType.GRAD, "ClippingStats", frequency=0.1),
+    #     # stats on training accuracy
+    #     stats.Stat(stats.StatType.TRAIN, "accuracy", frequency=0.01),
+    #     # stats on validation accuracy
+    #     stats.Stat(stats.StatType.TEST, "accuracy"),
+    # )
 
     # The following lines enable stat gathering for the clipping process
     # and set a default of per layer clipping for the Privacy Engine
