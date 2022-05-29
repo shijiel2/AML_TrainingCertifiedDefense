@@ -493,12 +493,16 @@ def main():
     augmentations = [
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
     ]
     normalize = [
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
         transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     ]
+
+    train_transform = transforms.Compose(
+        augmentations + normalize if args.train_mode == 'Bagging' else normalize
+    )
+    test_transform = transforms.Compose(normalize)
 
     def gen_sub_dataset(dataset, sub_training_size, with_replacement):
         indexs = np.random.choice(len(dataset), sub_training_size, replace=with_replacement)
@@ -507,7 +511,6 @@ def main():
         return dataset
 
     def gen_train_dataset_loader(or_sub_training_size=None):
-        train_transform = transforms.Compose(augmentations)
         train_dataset = CIFAR10(
             root=args.data_root, train=True, download=True, transform=train_transform
         )
@@ -552,7 +555,6 @@ def main():
         return train_dataset, train_loader
 
     def gen_test_dataset_loader():
-        test_transform = transforms.Compose(augmentations)
         test_dataset = CIFAR10(
             root=args.data_root, train=False, download=True, transform=test_transform
         )
@@ -588,10 +590,9 @@ def main():
         if args.model_name == 'ConvNet':
             model = convnet(num_classes=10).to(device)
         elif args.model_name == 'ResNet18':
-            # model = module_modification.convert_batchnorm_modules(models.resnet18(pretrained=False, num_classes=10)).to(device)
+            model = module_modification.convert_batchnorm_modules(models.resnet18(pretrained=False, num_classes=10)).to(device)
             # model = models.resnet18(pretrained=False, num_classes=10).to(device)
-            model = module_modification.convert_batchnorm_modules(ResNet18(10)).to(device)
-            
+            # model = module_modification.convert_batchnorm_modules(ResNet18(10)).to(device)
         elif args.model_name == 'LeNet':
             model = LeNet().to(device)
         else:
