@@ -4,11 +4,11 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=24
-#SBATCH --time=100:00:00
+#SBATCH --time=00:05:00
 #SBATCH --mem=64G
-#SBATCH --partition=deeplearn
+#SBATCH --partition=shortgpgpu
 #SBATCH --gres=gpu:4
-#SBATCH -q gpgpudeeplearn
+#SBATCH -q gpgpumse
 #SBATCH -A punim1629
 #SBATCH --mail-user=404notfxxkingfound@gmail.com
 #SBATCH --mail-type=ALL

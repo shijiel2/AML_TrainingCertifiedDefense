@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-MODE = ['ntrain', 'neval', 'certify', 'plot', 'nablation', 'nsub-acc-test', 'nsummary', 'nmerge']
+MODE = ['ntrain', 'neval', 'ncertify', 'plot', 'nablation', 'nsub-acc-test', 'nsummary', 'nmerge']
 DATASET = 'cifar10'
 TRAIN_MODE = 'Bagging' # DP, Sub-DP, Bagging, Sub-DP-no-amp
 

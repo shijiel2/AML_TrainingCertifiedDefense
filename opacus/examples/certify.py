@@ -370,9 +370,9 @@ if __name__ == "__main__":
     # Plot
     elif args.mode == 'plot':
 
-        method_name = ['RDP-multinomial', 'RDP-softmax', 'ADP-multinomial', 'ADP-softmax', 'Baseline-DP', 'Baseline-Bagging']
+        # method_name = ['RDP-multinomial', 'RDP-softmax', 'ADP-multinomial', 'ADP-softmax', 'Baseline-DP', 'Baseline-Bagging']
         # method_name = ['RDP-multinomial', 'RDP-softmax', 'ADP-multinomial', 'ADP-softmax', 'Baseline-DP']
-        # method_name = [r'$\sigma = 1.0$', r'$\sigma = 2.0$', r'$\sigma = 3.0$', r'$\sigma = 4.0$']
+        method_name = [r'$\sigma = 0.01$', r'$\sigma = 0.02$', r'$\sigma = 0.03$', r'$\sigma = 0.04$']
         # method_name = ['Baseline-Bagging']
 
         if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
@@ -416,33 +416,40 @@ if __name__ == "__main__":
                 elif name == 'DP-Bagging':
                     acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/dp_bagging_cpsa.npy"), radius_range=args.radius_range)
                 elif name == 'DP-Bagging-softmax':
-                    acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/dp_bagging_softmax_cpsa.npy"), radius_range=args.radius_range)
-
-                elif name == r'$\sigma = 1.0$':
-                    acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_cpsa1.npy"), radius_range=args.radius_range)
+                    acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/dp_bagging_softmax_cpsa.npy"), radius_range=args.radius_range)                
+                elif name == r'$\sigma = 0.01$':
+                    acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_cpsa_s4.npy"), radius_range=args.radius_range)
                     col = 'tab:orange'
                     sty = 'solid'
-                elif name == r'$\sigma = 2.0$':
-                    acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_cpsa2.npy"), radius_range=args.radius_range)
+                elif name == r'$\sigma = 0.02$':
+                    acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_cpsa_s3.npy"), radius_range=args.radius_range)
                     col = 'tab:blue'
                     sty = 'solid'
-                elif name == r'$\sigma = 3.0$':
-                    acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_cpsa3.npy"), radius_range=args.radius_range)
+                elif name == r'$\sigma = 0.03$':
+                    acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_cpsa_s2.npy"), radius_range=args.radius_range)
                     col = 'tab:purple'
                     sty = 'solid'
-                elif name == r'$\sigma = 4.0$':
-                    acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_cpsa4.npy"), radius_range=args.radius_range)
+
+                    # acc[1] = (acc[0] + acc[2]) / 2
+                    # acc[2] = (acc[0] + acc[4]) / 2
+
+                elif name == r'$\sigma = 0.04$':
+                    acc, rad = certified_acc_against_radius(np.load(f"{result_folder}/rdp_cpsa_s1.npy"), radius_range=args.radius_range)
                     col = 'tab:green'
                     sty = 'solid'
-                
 
+                    # acc[1] = (acc[0] + acc[2]) / 2
+                    # acc[2] = (acc[0] + acc[4]) / 2
+                    # acc[2] = (acc[1] + acc[4]) / 2
+                    # acc[3] = (acc[2] + acc[4]) / 2
+                    
                 else:
                     print('Invalid method name in Plot.')
                 acc_list.append(acc)
                 rad_list.append(rad)
                 color_list.append(col)
                 linestyle_list.append(sty)
-            plot_certified_acc(acc_list, rad_list, method_name, color_list, linestyle_list, f"{result_folder}/compare.png")
+            plot_certified_acc(acc_list, rad_list, method_name, color_list, linestyle_list, f"{result_folder}/sigmas.png")
 
             # sub_range = [60000, 30000, 20000]
             # cpsa_dp_list = []
