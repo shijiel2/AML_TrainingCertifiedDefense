@@ -106,7 +106,7 @@ parser.add_argument(
 parser.add_argument(
     "--radius-range",
     type=int,
-    default=220,
+    default=30,
     help="Size of training set",
 )
 parser.add_argument(
@@ -271,33 +271,51 @@ if __name__ == "__main__":
 
     num_class = aggregate_result.shape[1] - 1
     num_data = aggregate_result.shape[0]
+    
+    # rdp_steps = int(args.sub_training_size / 256 * 25)
+    rdp_steps = int(args.sub_training_size / 256 * 150)
+    dp_epsilon = float(2 * 4 / 7)
+    args.train_mode = 'Sub-DP-no-amp'
 
-    if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
-        dp_epsilon = np.load(f"{result_folder}/dp_epsilon.npy")
-        rdp_alphas = np.load(f"{result_folder}/rdp_alphas.npy")
-        rdp_epsilons = np.load(f"{result_folder}/rdp_epsilons.npy")
-        rdp_steps = np.load(f"{result_folder}/rdp_steps.npy")
+    # from opacus import PrivacyEngine
+    # from opacus import privacy_analysis
+    # alphas = [1 + x / 10.0 for x in range(1, 10000)]
+    # rdp = PrivacyEngine._get_renyi_divergence(args.sample_rate, args.sigma, alphas) * rdp_steps
+    # eps, best_alpha = privacy_analysis.get_privacy_spent(alphas, rdp, 1e-5)
 
-        # log params
-        logging.info(
-            f'lr: {args.lr} sigma: {args.sigma} C: {args.max_per_sample_grad_norm} sample_rate: {args.sample_rate} epochs: {args.epochs} n_runs: {args.n_runs}')
-        logging.info(f'dp  epsilon: {dp_epsilon}')
-        logging.info(f'rdp epsilons: {rdp_epsilons}')
-        logging.info(f'rdp steps: {rdp_steps}')
-        logging.info(f'aggregate results:\n{aggregate_result}')
-    else:
-        logging.info(f'aggregate results:\n{aggregate_result}')
+    # print("*****************************************************************************")
+    # print(f'when sample rate={args.sample_rate}, sigma={args.sigma}, steps={rdp_steps}')
+    # print(f'best DP: e={eps}, a={best_alpha}')
+    # print("*****************************************************************************")
+
+    # exit()
+
+    # if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
+    #     dp_epsilon = np.load(f"{result_folder}/dp_epsilon.npy")
+    #     rdp_alphas = np.load(f"{result_folder}/rdp_alphas.npy")
+    #     rdp_epsilons = np.load(f"{result_folder}/rdp_epsilons.npy")
+    #     rdp_steps = np.load(f"{result_folder}/rdp_steps.npy")
+
+    #     # log params
+    #     logging.info(
+    #         f'lr: {args.lr} sigma: {args.sigma} C: {args.max_per_sample_grad_norm} sample_rate: {args.sample_rate} epochs: {args.epochs} n_runs: {args.n_runs}')
+    #     logging.info(f'dp  epsilon: {dp_epsilon}')
+    #     logging.info(f'rdp epsilons: {rdp_epsilons}')
+    #     logging.info(f'rdp steps: {rdp_steps}')
+    #     logging.info(f'aggregate results:\n{aggregate_result}')
+    # else:
+    #     logging.info(f'aggregate results:\n{aggregate_result}')
 
     # Certify
     if args.mode == 'certify':
         if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
             np.save(f"{result_folder}/dp_cpsa.npy", certify('dp'))
-            np.save(f"{result_folder}/rdp_cpsa.npy", certify('rdp'))    
+            # np.save(f"{result_folder}/rdp_cpsa_{args.sigma}.npy", certify('rdp'))    
             # np.save(f"{result_folder}/rdp_gp_cpsa.npy", certify('rdp_gp'))  
             # np.save(f"{result_folder}/dp_baseline_size_one_cpsa.npy", certify('dp_baseline_size_one'))
             # np.save(f"{result_folder}/best_dp_cpsa.npy", certify('best'))
             np.save(f"{result_folder}/dp_softmax_cpsa.npy", certify('dp_softmax'))
-            np.save(f"{result_folder}/rdp_softmax_cpsa.npy", certify('rdp_softmax'))
+            # np.save(f"{result_folder}/rdp_softmax_cpsa.npy", certify('rdp_softmax'))
             # np.save(f"{result_folder}/rdp_softmax_moments_cpsa.npy", certify('rdp_softmax_moments'))
             # if args.train_mode == 'Sub-DP':
             #     np.save(f"{result_folder}/dp_bagging_cpsa.npy", certify('dp_bagging'))
@@ -352,9 +370,9 @@ if __name__ == "__main__":
     # Plot
     elif args.mode == 'plot':
 
-        # method_name = ['RDP-multinomial', 'RDP-softmax', 'ADP-multinomial', 'ADP-softmax', 'Baseline-DP', 'Baseline-Bagging']
+        method_name = ['RDP-multinomial', 'RDP-softmax', 'ADP-multinomial', 'ADP-softmax', 'Baseline-DP', 'Baseline-Bagging']
         # method_name = ['RDP-multinomial', 'RDP-softmax', 'ADP-multinomial', 'ADP-softmax', 'Baseline-DP']
-        method_name = [r'$\sigma = 1.0$', r'$\sigma = 2.0$', r'$\sigma = 3.0$', r'$\sigma = 4.0$']
+        # method_name = [r'$\sigma = 1.0$', r'$\sigma = 2.0$', r'$\sigma = 3.0$', r'$\sigma = 4.0$']
         # method_name = ['Baseline-Bagging']
 
         if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
@@ -424,7 +442,7 @@ if __name__ == "__main__":
                 rad_list.append(rad)
                 color_list.append(col)
                 linestyle_list.append(sty)
-            plot_certified_acc(acc_list, rad_list, method_name, color_list, linestyle_list, f"{result_folder}/mnist_sigma.png")
+            plot_certified_acc(acc_list, rad_list, method_name, color_list, linestyle_list, f"{result_folder}/compare.png")
 
             # sub_range = [60000, 30000, 20000]
             # cpsa_dp_list = []
@@ -444,7 +462,7 @@ if __name__ == "__main__":
         elif args.train_mode == 'Bagging':
             cpsa_bagging = np.load(f"{result_folder}/bagging_cpsa.npy")
             acc1, rad1 = certified_acc_against_radius(cpsa_bagging, radius_range=args.radius_range)
-            plot_certified_acc([acc1], [rad1], ['Bagging'], f"{result_folder}/certified_acc_plot.png")
+            plot_certified_acc([acc1], [rad1], ['Bagging'], ['tab:blue'], ['solid'], f"{result_folder}/certified_acc_plot.png")
 
         # # Optional "epoch V.S. acc" and "epoch V.S. eps" plots
         # epoch_acc_eps = np.load(f"{result_folder}/epoch_acc_eps.npy")

@@ -129,6 +129,9 @@ dmypy.json
 .pyre/
 .vscode
 results
+results_2
+results_3
+results_merge
 data
 
 cifar10

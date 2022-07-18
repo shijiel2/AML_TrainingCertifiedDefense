@@ -32,19 +32,32 @@ from tqdm import tqdm
 from models import ResNet18
 from certify_utilis import result_folder_path_generator
 from opacus.utils import module_modification
+from torch.utils.data.distributed import DistributedSampler
 
 
 
-def setup():
-    if sys.platform == "win32":
-        raise NotImplementedError("Windows version of multi-GPU is not supported yet.")
+# def setup():
+#     if sys.platform == "win32":
+#         raise NotImplementedError("Windows version of multi-GPU is not supported yet.")
+#     else:
+#         # initialize the process group
+#         torch.distributed.init_process_group(
+#             init_method="env://",
+#             backend="nccl",
+#         )
+
+def setup(args):
+
+    if torch.cuda.device_count() > 1:
+        torch.distributed.init_process_group(backend="nccl")
+        local_rank = torch.distributed.get_rank()
+        rank = 0
+        world_size = torch.cuda.device_count()
+        return (rank, local_rank, world_size)
+
     else:
-        # initialize the process group
-        torch.distributed.init_process_group(
-            init_method="env://",
-            backend="nccl",
-        )
-
+        logging.info(f"Running on a single GPU.")
+        return (0, 0, 1)
 
 def cleanup():
     torch.distributed.destroy_process_group()
@@ -94,14 +107,14 @@ def accuracy(preds, labels):
     return (preds == labels).mean()
 
 
-def train(args, model, train_loader, optimizer, epoch, device):
+def train(args, model, train_loader, optimizer, epoch, device, batch_num=None):
     model.train()
     criterion = nn.CrossEntropyLoss()
 
     losses = []
     top1_acc = []
 
-    for i, (images, target) in enumerate(tqdm(train_loader)):
+    for i, (images, target) in enumerate(train_loader):
 
         images = images.to(device)
         target = target.to(device)
@@ -130,6 +143,9 @@ def train(args, model, train_loader, optimizer, epoch, device):
         else:
             optimizer.virtual_step()
 
+        if batch_num is not None and i >= batch_num:
+            break
+
         # if i % args.print_freq == 0:
         #     if not args.disable_dp:
         #         epsilon, best_alpha = optimizer.privacy_engine.get_privacy_spent(
@@ -156,7 +172,7 @@ def test(args, model, test_loader, device):
     top1_acc = []
 
     with torch.no_grad():
-        for images, target in tqdm(test_loader):
+        for images, target in test_loader:
             images = images.to(device)
             target = target.to(device)
 
@@ -172,7 +188,7 @@ def test(args, model, test_loader, device):
     top1_avg = np.mean(top1_acc)
     # stats.update(stats.StatType.TEST, acc1=top1_avg)
 
-    strv = f"\tTest set:" f"Loss: {np.mean(losses):.6f} " f"Acc@1: {top1_avg :.6f} "
+    strv = f"\tTest set(size:{len(test_loader.dataset)}, device:{device}):" f"Loss: {np.mean(losses):.6f} " f"Acc@1: {top1_avg :.6f} "
     logging.info(strv)
     return top1_avg
 
@@ -181,7 +197,7 @@ def pred(args, model, test_loader, device):
     model.eval()
     preds_list = []
     with torch.no_grad():
-        for images, _ in tqdm(test_loader):
+        for images, _ in test_loader:
             images = images.to(device)
             output = model(images)
             preds = np.argmax(output.detach().cpu().numpy(), axis=1)
@@ -199,7 +215,7 @@ def softmax(args, model, test_loader, device):
     model.eval()
     softmax_list = []
     with torch.no_grad():
-        for images, _ in tqdm(test_loader):
+        for images, _ in test_loader:
             images = images.to(device)
             output = model(images)
             softmax = nn.Softmax(dim=1)(output).detach().cpu().numpy()
@@ -219,7 +235,7 @@ def main():
     parser.add_argument(
         "-j",
         "--workers",
-        default=2,
+        default=0,
         type=int,
         metavar="N",
         help="number of data loading workers (default: 2)",
@@ -444,51 +460,29 @@ def main():
     logging.basicConfig(filename=f"{result_folder}/train.log", filemode='w', level=logging.INFO)
     logging.getLogger().addHandler(logging.StreamHandler())
 
-    distributed = False
-    if args.local_rank != -1:
-        setup()
-        distributed = True
+    # distributed = False
+    # if args.local_rank != -1:
+    #     setup()
+    #     distributed = True
+
+    # Sets `world_size = 1` if you run on a single GPU with `args.local_rank = -1`
+    if args.device != "cpu":
+        rank, local_rank, world_size = setup(args)
+        device = local_rank
+    else:
+        device = "cpu"
+        rank = 0
+        world_size = 1
+
 
     if args.train_mode == 'Bagging' and args.n_accumulation_steps > 1:
         raise ValueError("Virtual steps only works with enabled DP")
-
-    # The following few lines, enable stats gathering about the run
-    # 1. where the stats should be logged
-    # stats.set_global_summary_writer(
-    #     tensorboard.SummaryWriter(os.path.join("/tmp/stat", args.log_dir))
-    # )
-    # 2. enable stats
-    # stats.add(
-    #     # stats about gradient norms aggregated for all layers
-    #     stats.Stat(stats.StatType.GRAD, "AllLayers", frequency=0.1),
-    #     # stats about gradient norms per layer
-    #     stats.Stat(stats.StatType.GRAD, "PerLayer", frequency=0.1),
-    #     # stats about clipping
-    #     stats.Stat(stats.StatType.GRAD, "ClippingStats", frequency=0.1),
-    #     # stats on training accuracy
-    #     stats.Stat(stats.StatType.TRAIN, "accuracy", frequency=0.01),
-    #     # stats on validation accuracy
-    #     stats.Stat(stats.StatType.TEST, "accuracy"),
-    # )
 
     # The following lines enable stat gathering for the clipping process
     # and set a default of per layer clipping for the Privacy Engine
     clipping = {"clip_per_layer": False, "enable_stat": True}
 
-    if args.secure_rng:
-        try:
-            import torchcsprng as prng
-        except ImportError as e:
-            msg = (
-                "To use secure RNG, you must install the torchcsprng package! "
-                "Check out the instructions here: https://github.com/pytorch/csprng#installation"
-            )
-            raise ImportError(msg) from e
-
-        generator = prng.create_random_device_generator("/dev/urandom")
-
-    else:
-        generator = None
+    generator = None
 
     augmentations = [
         transforms.RandomCrop(32, padding=4),
@@ -510,24 +504,60 @@ def main():
         print(f"Sub-dataset size {len(dataset)}")
         return dataset
 
-    def gen_train_dataset_loader(or_sub_training_size=None):
+    def gen_train_dataset_loader(sub_training_size):
         train_dataset = CIFAR10(
             root=args.data_root, train=True, download=True, transform=train_transform
         )
 
-        sub_training_size = args.sub_training_size if or_sub_training_size is None else or_sub_training_size
-
         if args.train_mode == 'Sub-DP' or args.train_mode == 'Bagging':
             train_dataset = gen_sub_dataset(train_dataset, sub_training_size, True)
+        
+        batch_num = None
+
+        if world_size > 1:
+            dist_sampler = DistributedSampler(train_dataset)
+        else:
+            dist_sampler = None
+
+        # batch_size = int(args.sample_rate * len(train_dataset))
+
+        # if args.train_mode == 'DP' or args.train_mode == 'Sub-DP':
+        #     train_loader = torch.utils.data.DataLoader(
+        #         train_dataset,
+        #         num_workers=args.workers,
+        #         generator=generator,
+        #         batch_size=batch_size,
+        #         sampler=dist_sampler,
+        #     )
+        # elif args.train_mode == 'Sub-DP-no-amp':
+        #     train_loader = torch.utils.data.DataLoader(
+        #         train_dataset,
+        #         num_workers=args.workers,
+        #         generator=generator,
+        #         batch_size=batch_size,
+        #         sampler=dist_sampler,
+        #     )
+        #     batch_num = int(sub_training_size / int(args.sample_rate * len(train_dataset)))
+        # else:
+        #     print('No Gaussian Sampler')
+        #     train_loader = torch.utils.data.DataLoader(
+        #         train_dataset,
+        #         num_workers=args.workers,
+        #         generator=generator,
+        #         batch_size=int(128/world_size),
+        #         sampler=dist_sampler,
+        #     )
+        # return train_dataset, train_loader, batch_num
         
         if args.train_mode == 'DP' or args.train_mode == 'Sub-DP':
             train_loader = torch.utils.data.DataLoader(
                 train_dataset,
                 num_workers=args.workers,
                 generator=generator,
-                batch_sampler=UniformWithReplacementSampler(
+                batch_sampler=FixedSizedUniformWithReplacementSampler(
                     num_samples=len(train_dataset),
-                    sample_rate=args.sample_rate,
+                    sample_rate=args.sample_rate/world_size,
+                    train_size=len(train_dataset)/world_size,
                     generator=generator,
                 ),
             )
@@ -538,8 +568,8 @@ def main():
                 generator=generator,
                 batch_sampler=FixedSizedUniformWithReplacementSampler(
                     num_samples=len(train_dataset),
-                    sample_rate=args.sample_rate,
-                    train_size=sub_training_size,
+                    sample_rate=args.sample_rate/world_size,
+                    train_size=sub_training_size/world_size,
                     generator=generator,
                 ),
             )
@@ -549,10 +579,10 @@ def main():
                 train_dataset,
                 num_workers=args.workers,
                 generator=generator,
-                batch_size=128,
-                shuffle=True,
+                batch_size=int(256/world_size),
+                sampler=dist_sampler,
             )
-        return train_dataset, train_loader
+        return train_dataset, train_loader, batch_num
 
     def gen_test_dataset_loader():
         test_dataset = CIFAR10(
@@ -567,9 +597,9 @@ def main():
         return test_dataset, test_loader
     
 
-    if distributed and args.device == "cuda":
-        args.device = "cuda:" + str(args.local_rank)
-    device = torch.device(args.device)
+    # if distributed and args.device == "cuda":
+    #     args.device = "cuda:" + str(args.local_rank)
+    # device = torch.device(args.device)
 
     """ Here we go the training and testing process """
     
@@ -588,20 +618,27 @@ def main():
         
         # Define the model
         if args.model_name == 'ConvNet':
-            model = convnet(num_classes=10).to(device)
-        elif args.model_name == 'ResNet18':
-            model = module_modification.convert_batchnorm_modules(models.resnet18(pretrained=False, num_classes=10)).to(device)
-            # model = models.resnet18(pretrained=False, num_classes=10).to(device)
-            # model = module_modification.convert_batchnorm_modules(ResNet18(10)).to(device)
+            model = convnet(num_classes=10)
+        elif args.model_name == 'ResNet18-BN':
+            model = ResNet18(10)
+            # model = module_modification.convert_batchnorm_modules(models.resnet18(pretrained=False, num_classes=10))
+            # model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+            # model = models.resnet18(pretrained=False, num_classes=10)
+            # model = module_modification.convert_batchnorm_modules(ResNet18(10))
+        elif args.model_name == 'ResNet18-GN':
+            model = module_modification.convert_batchnorm_modules(ResNet18(10))
         elif args.model_name == 'LeNet':
-            model = LeNet().to(device)
+            model = LeNet()
         else:
             exit(f'Model name {args.model_name} invaild.')
-        if distributed:
-            if args.train_mode == 'Bagging':
+        model = model.to(device)
+        
+        if world_size > 1:
+            if not args.train_mode == 'Bagging':
                 model = DPDDP(model)
             else:
-                model = DDP(model, device_ids=[args.local_rank])
+                # model = DDP(model, device_ids=[args.local_rank])
+                model = DDP(model, device_ids=[device])
         
         # Define the optimizer
         if args.optim == "SGD":
@@ -622,7 +659,7 @@ def main():
         if args.train_mode != 'Bagging':
             privacy_engine = PrivacyEngine(
                 model,
-                sample_rate=args.sample_rate * args.n_accumulation_steps,
+                sample_rate=args.sample_rate * args.n_accumulation_steps / world_size,
                 alphas=[1 + x / 10.0 for x in range(1, 100)],
                 noise_multiplier= 0.0 if args.train_mode == 'Bagging' else args.sigma,
                 max_grad_norm=args.max_per_sample_grad_norm,
@@ -630,17 +667,18 @@ def main():
                 **clipping,
             )
             privacy_engine.attach(optimizer)
+        
         # Training and testing
         model_pt_file = f"{models_folder}/model_{run_idx}.pt"
-        if os.path.isfile(model_pt_file) or args.load_model:
-            model.load_state_dict(torch.load(model_pt_file))
-        else:
+        def training_process():
+            logging.info(f'training model_{run_idx}...')
             # use this code for "sub_training_size V.S. acc"
             if args.sub_acc_test:
                 sub_training_size = int(50000 - 50000 / args.n_runs * run_idx)
-                _, train_loader = gen_train_dataset_loader(sub_training_size)
+                _, train_loader, batch_num = gen_train_dataset_loader(sub_training_size)
             else:    
-                _, train_loader = gen_train_dataset_loader()
+                sub_training_size = args.sub_training_size
+                _, train_loader, batch_num = gen_train_dataset_loader(sub_training_size)
 
             epoch_acc_epsilon = []
             for epoch in range(args.start_epoch, args.epochs + 1):
@@ -649,17 +687,20 @@ def main():
                     for param_group in optimizer.param_groups:
                         param_group["lr"] = lr
 
-                train(args, model, train_loader, optimizer, epoch, device)
-                if args.run_test:
-                    logging.info(f'Epoch: {epoch}')
-                    test(args, model, test_loader, device)
+                train(args, model, train_loader, optimizer, epoch, device, batch_num)
 
-                if run_idx == 0:
-                    logging.info(f'Epoch: {epoch}')
-                    acc = test(args, model, test_loader, device)
-                    if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
-                        eps, _ = optimizer.privacy_engine.get_privacy_spent(args.delta)
-                        epoch_acc_epsilon.append((acc, eps))
+                # if args.run_test:
+                #     logging.info(f'Epoch: {epoch}')
+                #     test(args, model, test_loader, device)
+
+                # if run_idx == 0:
+                #     logging.info(f'Epoch: {epoch}')
+                #     acc = test(args, model, test_loader, device)
+                #     if args.train_mode in ['DP', 'Sub-DP', 'Sub-DP-no-amp']:
+                #         eps, _ = optimizer.privacy_engine.get_privacy_spent(args.delta)
+                #         epoch_acc_epsilon.append((acc, eps))
+            
+            
             if run_idx == 0:
                 np.save(f"{result_folder}/epoch_acc_eps", epoch_acc_epsilon)
             
@@ -675,17 +716,31 @@ def main():
                 dp_epsilon, best_alpha = optimizer.privacy_engine.get_privacy_spent(args.delta)
                 rdp_steps = optimizer.privacy_engine.steps
                 logging.info(f"epsilon {dp_epsilon}, best_alpha {best_alpha}, steps {rdp_steps}")
+
+                logging.info(f"sample_rate {optimizer.privacy_engine.sample_rate}, noise_multiplier {optimizer.privacy_engine.noise_multiplier}, steps {optimizer.privacy_engine.steps}")
                 
                 np.save(f"{result_folder}/rdp_epsilons", rdp_epsilons)
                 np.save(f"{result_folder}/rdp_alphas", rdp_alphas)
                 np.save(f"{result_folder}/rdp_steps", rdp_steps)
                 np.save(f"{result_folder}/dp_epsilon", dp_epsilon)
         
+        if os.path.isfile(model_pt_file) or args.load_model:
+            try:
+                torch.distributed.barrier()
+                logging.info(f'loading existing model_{run_idx}...')
+                map_location = {'cuda:%d' % 0: 'cuda:%d' % local_rank}
+                model.load_state_dict(torch.load(model_pt_file, map_location=map_location))
+            except Exception as inst:
+                logging.info(f'fail to load model with error: {inst}')
+                training_process()
+        else:
+            training_process()
+        
         # save preds and model
         aggregate_result[np.arange(0, len(test_dataset)), pred(args, model, test_loader, device)] += 1
         aggregate_result_softmax[run_idx, np.arange(0, len(test_dataset)), 0:10] = softmax(args, model, test_loader, device)
         acc_list.append(test(args, model, test_loader, device))
-        if not args.load_model and args.save_model:
+        if not args.load_model and args.save_model and local_rank == 0:
             torch.save(model.state_dict(), model_pt_file)
 
     # Finish trining all models, save results
@@ -699,7 +754,7 @@ def main():
     if args.sub_acc_test:
         np.save(f"{result_folder}/subset_acc_list", sub_acc_list)
 
-    if args.local_rank != -1:
+    if world_size > 1:
         cleanup()
 
 

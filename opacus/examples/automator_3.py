@@ -10,12 +10,12 @@ from datetime import datetime
 from pathlib import Path
 
 
-MODE = ['ntrain', 'neval', 'ncertify', 'plot', 'nablation', 'nsub-acc-test', 'nsummary', 'nmerge']
+MODE = ['ntrain', 'neval', 'certify', 'plot', 'nablation', 'nsub-acc-test', 'nsummary', 'nmerge']
 DATASET = 'cifar10'
 TRAIN_MODE = 'Bagging' # DP, Sub-DP, Bagging, Sub-DP-no-amp
 
 # No saving
-TRAIN_COMMAND = 'python -m torch.distributed.launch --nproc_per_node=4 {dataset}.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr} -c {c} --model-name {model_name} --sub-training-size {sub_training_size} --train-mode {train_mode} --results-folder {results_folder} --save-model'
+TRAIN_COMMAND = 'python {dataset}.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr} -c {c} --model-name {model_name} --sub-training-size {sub_training_size} --train-mode {train_mode} --results-folder {results_folder} --save-model'
 
 EVAL_COMMAND = 'python {dataset}.py --n-runs {n_runs} --epochs {epochs} --sigma {sigma} --sample-rate {sample_rate} --lr {lr} -c {c} --model-name {model_name} --sub-training-size {sub_training_size} --train-mode {train_mode} --results-folder {results_folder} --load-model'
 
@@ -55,11 +55,11 @@ elif DATASET == 'cifar10':
     training_size = 50000
     n_runss = [1000]
     epochss = [200]
-    sigmas = [19.0] # sigmas = [1.0, 1.5, 2.0]
-    sample_rates = [256/4000] # sample_rates = [512/10000, 1024/10000]
+    sigmas = [5.0] # sigmas = [1.0, 1.5, 2.0]
+    sample_rates = [8/500] # sample_rates = [512/10000, 1024/10000]
     lrs = [0.01] # lrs = [0.01, 0.05, 0.1]
     clips = [10.0] # clips = [34 for sigma=1]
-    sub_training_sizes = [4000]
+    sub_training_sizes = [500]
     
 
 if 'train' in MODE:

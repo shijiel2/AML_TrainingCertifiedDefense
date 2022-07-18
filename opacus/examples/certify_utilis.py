@@ -680,6 +680,8 @@ def CertifyRadiusDPBS_softmax_prob(ls, CI, k, n, delta, steps, sample_rate, sigm
 
 
 def get_dir(train_mode, results_folder, model_name, lr, sigma, max_per_sample_grad_norm, sample_rate, epochs, n_runs, sub_training_size):
+    max_per_sample_grad_norm = float(max_per_sample_grad_norm)
+    sigma = float(sigma)
     if train_mode == 'DP':
         result_folder = (
             f"{results_folder}/{model_name}_{lr}_{sigma}_"
@@ -705,6 +707,19 @@ def get_dir(train_mode, results_folder, model_name, lr, sigma, max_per_sample_gr
     print(result_folder)
     return result_folder
 
+def extract_summary(dir_path):
+    acc_list = np.load(f'{dir_path}/acc_list.npy')
+    acc_avg = np.mean(acc_list)
+
+    from os.path import exists
+    file_exists = exists(f'{dir_path}/dp_epsilon.npy')
+    if file_exists:
+        eps = np.load(f'{dir_path}/dp_epsilon.npy')
+        eps = float(eps)
+    else:
+        eps = float('inf')
+
+    return acc_avg, eps
 
 def extract_summary_cifar(lines):
     import re
@@ -816,3 +831,41 @@ def result_folder_path_generator(args):
             f"{args.max_per_sample_grad_norm}_{args.sample_rate}_{args.epochs}_{args.sub_training_size}_{args.n_runs}_no_amp"
         )
     return result_folder
+
+def merge_models(source_folder_list, target_folder, acc_threshold, model_num):
+    s_path_acc_list = []
+    for s_folder in source_folder_list:
+        acc_list = np.load(f'{s_folder}/acc_list.npy')
+        for idx in range(len(acc_list)):
+            model_path = f'{s_folder}/models/model_{idx}.pt'
+            acc = float(acc_list[idx])
+            s_path_acc_list.append((model_path, acc))
+    s_path_acc_list.sort(key=lambda tup: tup[1], reverse=True)
+
+    if s_path_acc_list[model_num-1][1] < acc_threshold:
+        print(f'Failed, worst model acc is {s_path_acc_list[model_num-1][1]}')
+        return
+    else:
+        print(f'Success, worst model acc is {s_path_acc_list[model_num-1][1]}')
+    
+    def move_model(s_model_path, t_model_path):
+        import shutil
+        if s_model_path == t_model_path:
+            return
+        else:
+            shutil.copy2(s_model_path, t_model_path)
+
+    model_count = 0
+    for s_model_path, _ in s_path_acc_list:
+        t_model_path = f'{target_folder}/models/model_{model_count}.pt'
+
+        print(f'Moving {s_model_path} to {t_model_path}...')
+        move_model(s_model_path, t_model_path)
+        model_count += 1
+        if model_count == model_num:
+            break
+
+
+
+
+

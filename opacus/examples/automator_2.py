@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-MODE = ['ntrain', 'neval', 'ncertify', 'plot', 'nablation', 'nsub-acc-test', 'nsummary', 'nmerge']
+MODE = ['ntrain', 'neval', 'certify', 'plot', 'nablation', 'nsub-acc-test', 'nsummary', 'nmerge']
 DATASET = 'cifar10'
 TRAIN_MODE = 'Bagging' # DP, Sub-DP, Bagging, Sub-DP-no-amp
 
@@ -55,11 +55,11 @@ elif DATASET == 'cifar10':
     training_size = 50000
     n_runss = [1000]
     epochss = [200]
-    sigmas = [19.0] # sigmas = [1.0, 1.5, 2.0]
-    sample_rates = [256/4000] # sample_rates = [512/10000, 1024/10000]
+    sigmas = [4] # sigmas = [1.0, 1.5, 2.0]
+    sample_rates = [16/1000] # sample_rates = [512/10000, 1024/10000]
     lrs = [0.01] # lrs = [0.01, 0.05, 0.1]
     clips = [10.0] # clips = [34 for sigma=1]
-    sub_training_sizes = [4000]
+    sub_training_sizes = [1000]
     
 
 if 'train' in MODE:
